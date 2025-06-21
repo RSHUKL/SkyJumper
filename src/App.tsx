@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChatHeader } from './components/ChatHeader';
 import { MessageBubble } from './components/MessageBubble';
 import { TypingIndicator } from './components/TypingIndicator';
@@ -10,7 +11,8 @@ import { useVoice } from './hooks/useVoice';
 import { groqService } from './services/groqService';
 
 function App() {
-  const chat = useChat();
+  const navigate = useNavigate();
+  const chat = useChat(navigate);
   const voice = useVoice();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 

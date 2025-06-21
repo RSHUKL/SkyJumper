@@ -42,13 +42,13 @@ export interface APIError {
 export interface BookingDetails {
   name: string;
   phone: string;
-  email: string;
+  email?: string;
   slotTime: string;
   bookingDate: string;
   [key: string]: string;
 }
 
-export type BookingStep = 'name' | 'phone' | 'email' | 'slotTime' | 'bookingDate' | 'done';
+export type BookingStep = 'location' | 'name' | 'phone' | 'slotTime' | 'bookingDate' | 'done';
 
 export interface BookingState {
   step: BookingStep;

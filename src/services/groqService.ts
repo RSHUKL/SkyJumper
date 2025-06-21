@@ -34,13 +34,25 @@ class GroqService {
     retries = 3,
     userName?: string | null
   ): Promise<string> {
+    const chunks = [];
+    for await (const chunk of this.generateStreamingResponse(messages, retries, userName)) {
+      chunks.push(chunk);
+    }
+    return chunks.join('');
+  }
+  
+  async *generateStreamingResponse(
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    retries = 3,
+    userName?: string | null
+  ): AsyncGenerator<string> {
     if (!this.initialized || !this.client) {
       throw new Error('Groq service is not properly initialized. Please check your API key.');
     }
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        const completion = await this.client.chat.completions.create({
+        const stream = await this.client.chat.completions.create({
           messages: [
             {
               role: 'system',
@@ -52,15 +64,16 @@ class GroqService {
           temperature: 0.7,
           max_tokens: 1024,
           top_p: 1,
-          stream: false
+          stream: true,
         });
 
-        const response = completion.choices[0]?.message?.content;
-        if (!response) {
-          throw new Error('No response generated');
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content;
+          if (content) {
+            yield content;
+          }
         }
-
-        return response;
+        return; // Exit loop on success
       } catch (error: any) {
         console.error(`Groq API attempt ${attempt} failed:`, error);
         
@@ -77,7 +90,6 @@ class GroqService {
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
       }
     }
-
     throw new Error('Max retries exceeded');
   }
 

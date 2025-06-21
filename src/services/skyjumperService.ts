@@ -13,101 +13,101 @@ interface Pricing {
 class SkyJumperService {
   private locations: Location[] = [
     {
-      name: "Ambernath",
+      name: "Ambernath !",
       address: "4th Floor, Master Business Center, Next to Big Cinema, K.B. Road, Ambernath West. Maharashtra",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Amritsar",
+      name: "Amritsar !",
       address: "4th Floor, Mukut House, Mall Road, Amritsar, Punjab",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Bangalore",
+      name: "Bangalore !",
       address: "6th Floor, Garuda Mall, Magrath Rd, Ashok Nagar, Bangaluru, Karnataka",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Bathinda",
+      name: "Bathinda !",
       address: "6th Floor, Garuda Mall, Magrath Rd, Ashok Nagar, Bangaluru, Karnataka",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Chennai",
+      name: "Chennai !",
       address: "4th Floor, Grand Square Mall, Velachery, Chennai",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Chandigarh",
+      name: "Chandigarh !",
       address: "Ground Floor, Block 3, Oxford Street, Ambala Chandigarh Expressway, Zirakpur, Punjab",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Delhi",
+      name: "Delhi !",
       address: "Inside Adventure Island, Metro Walk Mall, Sector 10, Rohini, New Delhi",
       facilities: ["Trampoline Arena", "Soft Play", "Cafe", "Party Hall"]
     },
     {
-      name: "Faridabad",
+      name: "Faridabad !",
       address: "Auric Universal Tower, Sector 79, Faridabad, Haryana",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Ghaziabad",
+      name: "Ghaziabad !",
       address: "4th Floor, Shop No. 1, The Opulent Mall, Grand Trunk Road, Nehru Nagar 3, Ghaziabad, Uttar Pradesh",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Gurugram ILD",
+      name: "Gurugram ILD !",
       address: "ILD Mall, Gurugram",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Gurugram M3M Broadway",
+      name: "Gurugram M3M Broadway !",
       address: "M3M Broadway, Sector 65, Gurugram",
       facilities: ["Trampoline Arena", "Laser Tag Arena", "Soft Play", "Sky Verve", "Sky Coaster", "Wall Climbing", "Cafe", "Party Hall"]
     },
     {
-      name: "Gurugram Ocus Medley",
+      name: "Gurugram Ocus Medley !",
       address: "Ocus Medley, Sector 67, Gurugram",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Jalandhar",
+      name: "Jalandhar !",
       address: "G FLOOR, 1ST FLOOR, Near Guru Ravidas Chowk, 120 Feet Road, Guru Teg Bahadur Nagar, Jalandhar, Punjab",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Karnal",
+      name: "Karnal !",
       address: "Namastey Chawk, Karnal, Near Bank of Baroda, Haryana",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Lucknow",
+      name: "Lucknow !",
       address: "CP-3A, Vikalp Khand, Gomti Nagar, Lucknow, UP",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Noida Go Bananas",
+      name: "Noida Go Bananas !",
       address: "2nd Floor, MODI MALL, Sector-25A, Noida, Uttar Pradesh",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Noida Spectrum",
+      name: "Noida Spectrum !",
       address: "Lower Ground Floor Atrium, Spectrum @ Metro Mall, Sector-75, Near Sector 50 Metro Station, Noida, UP",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Noida Wave",
+      name: "Noida Wave !",
       address: "WAVE MALL, SECTOR 18, Noida, Gautambuddha Nagar, Uttar Pradesh",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },
     {
-      name: "Pune Amanora",
+      name: "Pune Amanora !",
       address: "Amanora Mall, Malwadi Road, Amanora Park Township, Village Sadesatara Nali, Hadapsar, Pune, Maharashtra",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     },    {
-      name: "Pune Creaticity",
+      name: "Pune Creaticity !",
       address: "Level-02, Fountain House, Creaticity Mall, Shastrinagar, Yerawada, Pune, Maharashtra",
       facilities: ["Trampoline Arena", "Soft Play", "Party Hall"]
     }
@@ -115,17 +115,17 @@ class SkyJumperService {
 
   private pricing: Pricing[] = [
     {
-      duration: "30 Min TP",
+      duration: "30 Min ",
       price: 499,
       description: "30 minutes of trampoline park access"
     },
     {
-      duration: "60 Min TP",
+      duration: "60 Min ",
       price: 799,
       description: "60 minutes of trampoline park access"
     },
     {
-      duration: "90 Min TP",
+      duration: "90 Min ",
       price: 999,
       description: "90 minutes of trampoline park access"
     }

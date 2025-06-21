@@ -61,15 +61,21 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
       return;
     }
 
-    try {
-      const result = await startListening();
-      if (result) {
-        const cleanedText = sanitizeText(result);
-        onVoiceInput(cleanedText);
-      }
-    } catch (err: any) {
-      console.error('Voice input error:', err);
-    }
+    startListening({
+      onResult: (transcript, isFinal) => {
+        // For now, we only care about the final result.
+        if (isFinal) {
+          const cleanedText = sanitizeText(transcript);
+          onVoiceInput(cleanedText);
+        }
+      },
+      onEnd: () => {
+        // Speech recognition ended.
+      },
+      onError: (error) => {
+        console.error('VoiceButton error:', error);
+      },
+    });
   };
 
   if (!isRecognitionSupported && !isSynthesisSupported) {
@@ -139,4 +145,4 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
       )}
     </div>
   );
-};
+}; 

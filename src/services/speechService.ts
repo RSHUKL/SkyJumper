@@ -38,6 +38,8 @@ interface SpeechRecognition extends EventTarget {
   onspeechend: ((this: SpeechRecognition, ev: Event) => any) | null;
 }
 
+const FILLER_WORDS = ["Hmm", "Let me think", "Just a moment", "Okay", "Got it"];
+
 class SpeechService {
   private synthesis: SpeechSynthesis;
   private recognition: SpeechRecognition | null;
@@ -201,7 +203,6 @@ class SpeechService {
     });
   }
 
-
   private convertToPlainText(text: string): string {
     // Split text into sentences and process each one
     const sentences = text.split(/([.!?]+\s+)/)
@@ -225,9 +226,9 @@ class SpeechService {
     return sentences.join(' ').trim();
   }
     
-
-
-
+  public getRandomFillerWord(): string {
+    return FILLER_WORDS[Math.floor(Math.random() * FILLER_WORDS.length)];
+  }
 
   private processLLMResponse(text: string): string {
     // Remove URLs and links first
@@ -282,125 +283,80 @@ class SpeechService {
   }
 
   async speak(text: string, settings: VoiceSettings): Promise<void> {
-    // If speaker is disabled, don't speak
-    if (!this.isSpeakerEnabled || !this.isSynthesisSupported() || !text.trim()) return;
-
-    try {
-      await this.waitForVoices();
-
-      // Cancel any ongoing speech
-      this.synthesis.cancel();
-
-      // Process text based on whether it's from an LLM
-      const plainText = text.includes('```') || text.includes('[]') || text.includes('<')
-        ? this.processLLMResponse(text)
-        : this.convertToPlainText(text);
-
-      // Skip if no valid text remains after processing
-      if (!plainText.trim()) {
-        console.log('No valid text to speak after processing');
-        return;
-      }
-
-      // Create new utterance
-      const utterance = new SpeechSynthesisUtterance(plainText);
-
-      // Apply settings
-      utterance.voice = this.selectedVoice;
-      utterance.rate = settings.rate;
-      utterance.pitch = settings.pitch;
-      utterance.volume = settings.volume;
-
-      // Add event listeners
-      utterance.onend = () => {
-        console.log('Speech ended');
-      };
-
-      utterance.onerror = (event) => {
-        console.error('Speech synthesis error:', event);
-      };
-
-      // Small delay to ensure previous speech is cleared
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Speak
-      this.synthesis.speak(utterance);
-    } catch (error) {
-      console.error('Error in speak:', error);
-      throw error;
-    }
-  }
-
-  stopSpeaking() {
-    if (this.isSynthesisSupported()) {
-      this.synthesis.cancel();
-    }
-  }
-
-  async startListening(): Promise<string> {
-    if (!this.isRecognitionSupported()) {
-      throw new Error('Speech recognition not supported in this browser');
+    if (!this.isSpeakerEnabled) {
+      console.log('Speaker is disabled, skipping speech synthesis.');
+      return;
     }
 
-    if (!this.recognition) {
-      throw new Error('Speech recognition not initialized');
+    // Check if another utterance is already in progress
+    if (this.synthesis.speaking) {
+      console.warn('Speech synthesis is already in progress. Skipping new request.');
+      return;
     }
 
-    if (this.isListening) {
-      this.stopListening();
+    await this.waitForVoices();
+    const cleanText = this.processLLMResponse(text);
+    if (!cleanText) {
+      console.warn('Skipping empty text for speech synthesis');
+      return;
     }
 
     return new Promise((resolve, reject) => {
-      let hasResult = false;
-      let timeoutId: NodeJS.Timeout;
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.voice = this.selectedVoice || settings.voice;
+      utterance.rate = settings.rate;
+      utterance.pitch = settings.pitch;
+      utterance.volume = settings.volume;
+      utterance.lang = settings.language;
 
-      timeoutId = setTimeout(() => {
-        if (!hasResult) {
-          this.stopListening();
-          reject(new Error('No speech detected within timeout'));
-        }
-      }, 10000);
+      utterance.onend = () => resolve();
+      utterance.onerror = (event) => reject(event.error);
 
-      this.recognition!.onresult = (event) => {
-        clearTimeout(timeoutId);
-        hasResult = true;
-        const text = event.results[0][0].transcript;
-        console.log('Speech recognition result:', text);
-        resolve(text);
-      };
-
-      this.recognition!.onerror = (event: any) => {
-        clearTimeout(timeoutId);
-        console.error('Speech recognition error:', event.error);
-        reject(new Error(`Recognition error: ${event.error}`));
-      };
-
-      this.recognition!.onend = () => {
-        clearTimeout(timeoutId);
-        if (!hasResult) {
-          reject(new Error('No speech detected'));
-        }
-      };
-
-      try {
-        console.log('Starting speech recognition...');
-        this.recognition!.start();
-      } catch (error) {
-        clearTimeout(timeoutId);
-        console.error('Error starting speech recognition:', error);
-        reject(error);
-      }
+      this.synthesis.speak(utterance);
     });
+  }
+
+  stopSpeaking() {
+    if (this.synthesis.speaking) {
+      this.synthesis.cancel();
+    }
+  }
+
+  startListening(callbacks: {
+    onResult: (transcript: string, isFinal: boolean) => void;
+    onEnd: () => void;
+    onError: (error: any) => void;
+  }): void {
+    if (!this.recognition || this.isListening) {
+      return;
+    }
+
+    // Interrupt any ongoing speech
+    this.stopSpeaking();
+
+    this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // For one-shot recognition, we only need the final result.
+      const finalTranscript = event.results[0][0].transcript;
+      callbacks.onResult(finalTranscript.trim(), true);
+    };
+
+    this.recognition.onend = () => {
+      this.isListening = false;
+      callbacks.onEnd();
+    };
+
+    this.recognition.onerror = (event: any) => {
+      this.isListening = false;
+      callbacks.onError(event.error);
+    };
+
+    this.recognition.start();
+    this.isListening = true;
   }
 
   stopListening() {
     if (this.recognition && this.isListening) {
-      try {
-        console.log('Stopping speech recognition...');
-        this.recognition.stop();
-      } catch (error) {
-        console.error('Error stopping speech recognition:', error);
-      }
+      this.recognition.stop();
       this.isListening = false;
     }
   }

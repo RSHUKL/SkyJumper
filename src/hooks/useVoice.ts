@@ -2,23 +2,19 @@ import { useState, useCallback, useRef } from 'react';
 import { speechService } from '../services/speechService';
 import type { VoiceSettings } from '../types';
 
-const defaultVoiceSettings: VoiceSettings = {
-  enabled: true,
-  autoPlay: true,
-  voice: null,
-  rate: 0.7,
-  pitch: 1,
-  volume: 1,
-  language: 'en-US'
-};
-
 export function useVoice() {
-  const [settings, setSettings] = useState<VoiceSettings>(defaultVoiceSettings);
+  const [settings, setSettings] = useState<VoiceSettings>({
+    enabled: true,
+    autoPlay: true,
+    voice: null,
+    rate: 0.7,
+    pitch: 1,
+    volume: 1,
+    language: 'en-US'
+  });
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const isListeningRef = useRef(false);
 
   const toggleSpeaker = useCallback(() => {
     return speechService.toggleSpeaker();
@@ -28,49 +24,60 @@ export function useVoice() {
     return speechService.isSpeakerOn();
   }, []);
 
-  const startListening = useCallback(async (): Promise<string | null> => {
-    if (isListeningRef.current) return null;
+  const startListening = useCallback(
+    ({
+      onResult,
+      onEnd,
+      onError,
+    }: {
+      onResult: (transcript: string, isFinal: boolean) => void;
+      onEnd: () => void;
+      onError: (error: any) => void;
+    }) => {
+      if (isListening) return;
 
-    try {
       setError(null);
       setIsListening(true);
-      isListeningRef.current = true;
 
-      const result = await speechService.startListening();
-      return result;
-    } catch (error: any) {
-      console.error('Voice recognition error:', error);
-      setError(error.message);
-      return null;
-    } finally {
-      setIsListening(false);
-      isListeningRef.current = false;
-    }
-  }, []);
+      speechService.startListening({
+        onResult,
+        onEnd: () => {
+          setIsListening(false);
+          onEnd();
+        },
+        onError: (err: any) => {
+          console.error('Voice recognition error:', err);
+          setError(err.message || err);
+          setIsListening(false);
+          onError(err);
+        },
+      });
+    },
+    [isListening]
+  );
 
   const stopListening = useCallback(() => {
-    if (isListeningRef.current) {
-      speechService.stopListening();
-      setIsListening(false);
-      isListeningRef.current = false;
-    }
+    speechService.stopListening();
+    setIsListening(false);
   }, []);
 
-  const speak = useCallback(async (text: string) => {
-    if (!settings.enabled || !text.trim()) return;
+  const speak = useCallback(
+    async (text: string) => {
+      if (!settings.enabled || !text.trim()) return;
 
-    try {
-      setError(null);
-      setIsSpeaking(true);
-      
-      await speechService.speak(text, settings);
-    } catch (error: any) {
-      console.error('Speech synthesis error:', error);
-      setError(error.message);
-    } finally {
-      setIsSpeaking(false);
-    }
-  }, [settings]);
+      try {
+        setError(null);
+        setIsSpeaking(true);
+        await speechService.speak(text, settings);
+      } catch (error: any) {
+        console.error('Speech synthesis error:', error);
+        setError(error.message);
+      } finally {
+        setIsSpeaking(false);
+      }
+    },
+    [settings]
+  );
 
   const stopSpeaking = useCallback(() => {
     speechService.stopSpeaking();
@@ -78,7 +85,7 @@ export function useVoice() {
   }, []);
 
   const updateSettings = useCallback((newSettings: Partial<VoiceSettings>) => {
-    setSettings(prev => ({ ...prev, ...newSettings }));
+    setSettings((prev) => ({ ...prev, ...newSettings }));
   }, []);
 
   return {
@@ -95,6 +102,6 @@ export function useVoice() {
     isSynthesisSupported: speechService.isSynthesisSupported(),
     clearError: () => setError(null),
     isSpeakerOn,
-    toggleSpeaker
+    toggleSpeaker,
   };
 }

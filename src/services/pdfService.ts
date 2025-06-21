@@ -3,7 +3,7 @@ import { jsPDF } from "jspdf";
 export interface BookingDetails {
   name: string;
   phone: string;
-  email: string;
+  email?: string;
   slotTime: string;
   bookingDate: string;
   [key: string]: string; // for any extra fields
@@ -18,6 +18,7 @@ export function generateBookingPDF(details: BookingDetails) {
   doc.setFontSize(12);
   let y = 40;
   Object.entries(details).forEach(([key, value]) => {
+    if (key === 'email' && !value) return; 
     const label = key
       .replace(/([A-Z])/g, ' $1')
       .replace(/^./, (str) => str.toUpperCase());

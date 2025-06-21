@@ -1,19 +1,20 @@
 import { useState, useCallback, useRef } from 'react';
+import { NavigateFunction } from 'react-router-dom';
 import { groqService } from '../services/groqService';
 import type { Message, ChatState, BookingState, BookingStep, BookingDetails } from '../types';
 import { generateBookingPDF } from '../services/pdfService';
 
-const BOOKING_STEPS: BookingStep[] = ['name', 'phone', 'email', 'slotTime', 'bookingDate', 'done'];
+const BOOKING_STEPS: BookingStep[] = ['location', 'name', 'phone', 'slotTime', 'bookingDate', 'done'];
 const BOOKING_QUESTIONS: Record<BookingStep, string> = {
-  name: "What's your full name?",
-  phone: "What's your phone number?",
-  email: "What's your email address?",
-  slotTime: "What slot time would you like to book? (e.g., 3:00 PM - 4:00 PM)",
-  bookingDate: "For which date is the booking? (e.g., 2024-07-01)",
+  location: "What is your preferred location for the booking? Kindly select one from the following options: Ambernath!, Amritsar!, Bangalore!, Bathinda!, Chennai!, Chandigarh!, Delhi!, Faridabad!, Ghaziabad!, Gurugram ILD!, Gurugram M3M Broadway!, Gurugram Ocus Medley!, Jalandhar!, Karnal!, Lucknow!, Noida Go Bananas!, Noida Spectrum!, Noida Wave!, Pune Amanora!, Pune Creaticity! ",
+  name: "May I please have your full name to ensure the booking is registered correctly under your details?",
+  phone: "Could you kindly share your phone number? This will help us contact you if needed and confirm your reservation.",
+  slotTime: "What preferred slot time would you like to reserve for your visit? For example, 30 Min, 60 Min, 90 Min",
+  bookingDate: "On which date would you like to schedule your visit? Kindly enter the date !",
   done: ''
 };
 
-export function useChat() {
+export function useChat(navigate: NavigateFunction) {
   const [state, setState] = useState<ChatState>({
     messages: [],
     isLoading: false,
@@ -117,13 +118,17 @@ export function useChat() {
         generateBookingPDF(nextData as BookingDetails);
         const botMsg: Message = {
           id: generateMessageId(),
-          text: 'Your booking is confirmed! A confirmation PDF has been downloaded.',
+          text: 'Your booking has been successfully confirmed. A confirmation PDF containing all the relevant details has been generated and downloaded for your reference. Thank you for choosing SkyJumper! for best experience log on to our website https://skyjumpertrampolinepark.com/',
           sender: 'ai',
           timestamp: new Date()
         };
         newMessages.push(botMsg);
         newConversationHistory.push({ role: 'assistant', content: botMsg.text });
         conversationHistory.current = newConversationHistory.slice(-20);
+        
+        // Redirect to login page
+        setTimeout(() => navigate('/login'), 2000);
+
         return {
           ...prev,
           messages: newMessages,
@@ -131,7 +136,7 @@ export function useChat() {
         };
       }
     });
-  }, []);
+  }, [navigate]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return null;
@@ -147,28 +152,25 @@ export function useChat() {
       const name = text.trim();
       setState(prev => ({ ...prev, userName: name, waitingForName: false }));
       addMessage(name, 'user');
-      const aiText = `Nice to meet you, ${name}! How can I help you today?`;
+      const aiText = `Nice to meet you, ${name}! I'm here to ensure your SkyJumper experience is as seamless and enjoyable as possible. How may I assist you today in planning your visit or managing your booking?`;
       addMessage(aiText, 'ai');
       return { text: aiText };
     }
 
-// If first message and greeting, ask for name
-if (state.messages.length === 0 && isGreeting(text)) {
-  addMessage(text.trim(), 'user');
-  setState(prev => ({ ...prev, waitingForName: true }));
-  const aiText = `Hey there! Welcome to SkyJumper — the place where the fun never stops!
-I’m Skippy, your bounce-tastic booking buddy, and I’m super excited to help you plan your next thrilling adventure.
-We’ve got trampolines, games, and high-flying activities lined up just for you — but first things first!
-What is your name?`;
-  addMessage(aiText, 'ai');
-  return { text: aiText };
-}
+    // If first message and greeting, ask for name
+    if (state.messages.length === 0 && isGreeting(text)) {
+      addMessage(text.trim(), 'user');
+      setState(prev => ({ ...prev, waitingForName: true }));
+      const aiText = `Welcome to SkyJumper! your go-to destination for excitement and adventure. I'm your Assistant, your dedicated booking assistant, here to help you plan a memorable experience filled with trampolines, games, and high-energy activities. To get started, may I please have your name?`;
+      addMessage(aiText, 'ai');
+      return { text: aiText };
+    }
 
     // If booking intent, start booking flow
     if (isBookingIntent(text)) {
       addMessage(text.trim(), 'user');
-      addMessage(BOOKING_QUESTIONS['name'], 'ai');
-      setState(prev => ({ ...prev, booking: { step: 'name', data: {} } }));
+      addMessage(BOOKING_QUESTIONS['location'], 'ai');
+      setState(prev => ({ ...prev, booking: { step: 'location', data: {} } }));
       return { text };
     }
 
