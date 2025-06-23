@@ -23,30 +23,29 @@ function App() {
   };
   useEffect(() => {
     scrollToBottom();
-  }, [chat.messages, chat.isLoading]);  // Initialize auto voice conversation on first load
+  }, [chat.messages, chat.isLoading]);  // Initialize chat on first load
   useEffect(() => {
-    const initializeWithPermissions = async () => {
-      if (!chat.isInitialized && chat.autoVoiceMode && voice.isSynthesisSupported && voice.isRecognitionSupported) {
-        // Check microphone permissions first
-        const hasPermission = await voice.checkMicrophonePermissions();
-        if (!hasPermission) {
-          // Try to request permissions
-          const granted = await voice.requestMicrophonePermissions();
-          if (!granted) {
-            console.warn('Microphone permissions denied, auto voice mode may not work properly');
+    const initializeChat = async () => {
+      if (!chat.isInitialized) {
+        if (chat.autoVoiceMode && voice.isSynthesisSupported && voice.isRecognitionSupported) {
+          // Auto voice mode - check permissions first
+          const hasPermission = await voice.checkMicrophonePermissions();
+          if (!hasPermission) {
+            const granted = await voice.requestMicrophonePermissions();
+            if (!granted) {
+              console.warn('Microphone permissions denied, auto voice mode may not work properly');
+            }
           }
-        }
-        
-        const welcomeMessage = chat.initializeAutoVoice();
-        if (welcomeMessage) {
-          // Don't speak here - let the speaking useEffect handle it
+          chat.initializeAutoVoice();
+        } else {
+          // Normal mode - just initialize with welcome message
+          chat.initializeChat();
         }
       }
     };
     
-    initializeWithPermissions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat.isInitialized, chat.autoVoiceMode, voice.isSynthesisSupported, voice.isRecognitionSupported]);
+    initializeChat();
+  }, [chat.isInitialized, chat.autoVoiceMode, voice.isSynthesisSupported, voice.isRecognitionSupported, chat, voice]);
   // Handle automatic voice flow: when bot finishes speaking, start listening
   useEffect(() => {
     if (chat.autoVoiceMode && !voice.isSpeaking && !voice.isListening && chat.messages.length > 0) {

@@ -16,10 +16,10 @@ export function useChat(navigate: NavigateFunction) {  const [state, setState] =
     isInitialized: false,
     booking: null
   });
-
   const messageIdCounter = useRef(0);
   const conversationHistory = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const isAutoVoiceInitialized = useRef(false);
+  const isGeneralInitialized = useRef(false);
 
   const generateMessageId = () => `msg-${++messageIdCounter.current}`;
 
@@ -270,8 +270,7 @@ export function useChat(navigate: NavigateFunction) {  const [state, setState] =
 
   const clearError = useCallback(() => {
     setState(prev => ({ ...prev, error: null }));
-  }, []);
-  // Initialize auto voice conversation with AI
+  }, []);  // Initialize auto voice conversation with AI
   const initializeAutoVoice = useCallback(() => {
     if (!isAutoVoiceInitialized.current && !state.isInitialized && state.autoVoiceMode) {
       isAutoVoiceInitialized.current = true;
@@ -286,6 +285,21 @@ export function useChat(navigate: NavigateFunction) {  const [state, setState] =
     }
     return null;
   }, [addMessage, state.autoVoiceMode, state.isInitialized]);
+  // Initialize chat with default welcome message (regardless of auto voice mode)
+  const initializeChat = useCallback(() => {
+    if (!state.isInitialized && !isGeneralInitialized.current) {
+      isGeneralInitialized.current = true;
+      
+      // Business-focused welcome message
+      const welcomeMsg = "Hi! Welcome to SkyJumper — your spot for fun and adventure. I'm your booking assistant. Can I please have your name to get started?";
+      
+      addMessage(welcomeMsg, 'ai');
+      setState(prev => ({ ...prev, isInitialized: true }));
+      
+      return welcomeMsg;
+    }
+    return null;
+  }, [addMessage, state.isInitialized]);
   const toggleAutoVoiceMode = useCallback(() => {
     setState(prev => ({ ...prev, autoVoiceMode: !prev.autoVoiceMode }));
   }, []);
@@ -299,7 +313,6 @@ export function useChat(navigate: NavigateFunction) {  const [state, setState] =
       }
     }));
   }, []);
-
   return {
     ...state,
     sendMessage,
@@ -308,6 +321,7 @@ export function useChat(navigate: NavigateFunction) {  const [state, setState] =
     setPlaying,
     clearError,
     initializeAutoVoice,
+    initializeChat,
     toggleAutoVoiceMode,
     updateBookingField
   };
