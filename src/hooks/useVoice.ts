@@ -151,6 +151,13 @@ export function useVoice() {  const [settings, setSettings] = useState<VoiceSett
       return false;
     }
   }, []);
+  const hasUserInteracted = useCallback(() => {
+    return speechService.hasUserInteractionOccurred();
+  }, []);
+
+  const triggerUserInteraction = useCallback(() => {
+    speechService.triggerUserInteraction();
+  }, []);
 
   return {
     settings,
@@ -171,5 +178,7 @@ export function useVoice() {  const [settings, setSettings] = useState<VoiceSett
     stopContinuousListening,
     checkMicrophonePermissions,
     requestMicrophonePermissions,
+    hasUserInteracted,
+    triggerUserInteraction,
   };
 }

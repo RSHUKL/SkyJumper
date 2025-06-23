@@ -18,6 +18,7 @@ interface ChatContainerProps {
   onDismissError: () => void;
   messagesEndRef: React.RefObject<HTMLDivElement>;
   voiceEnabled: boolean;
+  onTextboxFocus?: () => void;
 }
 
 export const ChatContainer: React.FC<ChatContainerProps> = ({
@@ -31,7 +32,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   errorMessage,
   onDismissError,
   messagesEndRef,
-  voiceEnabled
+  voiceEnabled,
+  onTextboxFocus
 }) => {
   const getActiveUsers = () => {
     return messages.length > 0 ? '1 Active Chat' : 'Ready to Chat';
@@ -105,14 +107,14 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
       </div>
       
       {/* Chat Input at bottom */}
-      <div className="border-t border-gray-200 flex-shrink-0">
-        <ChatInput
+      <div className="border-t border-gray-200 flex-shrink-0">        <ChatInput
           onSendMessage={onSendMessage}
           isLoading={isLoading}
           disabled={isLoading}
           waitingForName={waitingForName}
           currentTranscript={currentTranscript}
           isAutoVoiceMode={isAutoVoiceMode}
+          onTextboxFocus={onTextboxFocus}
         />
       </div>
     </div>

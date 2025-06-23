@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChatHeader } from './components/ChatHeader';
 import { ChatContainer } from './components/ChatContainer';
@@ -20,29 +20,27 @@ function App() {
   };
   useEffect(() => {
     scrollToBottom();
-  }, [chat.messages, chat.isLoading]);  // Initialize chat on first load
+  }, [chat.messages, chat.isLoading]);  // Initialize chat on first load - run only once
   useEffect(() => {
     const initializeChat = async () => {
-      if (!chat.isInitialized) {
-        if (chat.autoVoiceMode && voice.isSynthesisSupported && voice.isRecognitionSupported) {
-          // Auto voice mode - check permissions first
-          const hasPermission = await voice.checkMicrophonePermissions();
-          if (!hasPermission) {
-            const granted = await voice.requestMicrophonePermissions();
-            if (!granted) {
-              console.warn('Microphone permissions denied, auto voice mode may not work properly');
-            }
-          }
-          chat.initializeAutoVoice();
-        } else {
-          // Normal mode - just initialize with welcome message
-          chat.initializeChat();
-        }
+      console.log('=== CHAT INITIALIZATION CHECK ===', {
+        isInitialized: chat.isInitialized,
+        autoVoiceMode: chat.autoVoiceMode,
+        messagesLength: chat.messages.length
+      });
+        if (!chat.isInitialized) {
+        console.log('Initializing chat...');
+        // Always use the same initialization regardless of voice mode
+        console.log('Calling initializeChat...');
+        chat.initializeChat();
+      } else {
+        console.log('Chat already initialized, skipping...');
       }
     };
-    
-    initializeChat();
-  }, [chat.isInitialized, chat.autoVoiceMode, voice.isSynthesisSupported, voice.isRecognitionSupported, chat, voice]);
+      initializeChat();
+    // Only depend on isInitialized to prevent multiple runs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.isInitialized]);
   // Handle automatic voice flow: when bot finishes speaking, start listening
   useEffect(() => {
     if (chat.autoVoiceMode && !voice.isSpeaking && !voice.isListening && chat.messages.length > 0) {
@@ -69,34 +67,45 @@ function App() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat.autoVoiceMode, voice.isSpeaking, voice.isListening, chat.messages, voice.isRecognitionSupported]);// Speak the latest AI message if voice is enabled
+  }, [chat.autoVoiceMode, voice.isSpeaking, voice.isListening, chat.messages, voice.isRecognitionSupported]);  // Consolidated speech logic - speak AI messages when conditions are met
   useEffect(() => {
-    console.log('Voice settings check:', {
+    const hasUserInteracted = voice.hasUserInteracted();
+    
+    console.log('=== SPEECH LOGIC CHECK ===');
+    console.log('Voice settings:', {
       messagesLength: chat.messages.length,
       voiceEnabled: voice.settings.enabled,
       autoPlay: voice.settings.autoPlay,
-      synthSupported: voice.isSynthesisSupported
+      synthSupported: voice.isSynthesisSupported,
+      hasUserInteracted,
+      isSpeaking: voice.isSpeaking
     });
 
+    // Only proceed if we have messages and voice is properly configured
     if (
       chat.messages.length > 0 &&
       voice.settings.enabled &&
       voice.settings.autoPlay &&
-      voice.isSynthesisSupported
-    ) {      const lastMsg = chat.messages[chat.messages.length - 1];
-      console.log('Checking last message:', { sender: lastMsg.sender, text: lastMsg.text.substring(0, 50) });
+      voice.isSynthesisSupported &&
+      !voice.isSpeaking
+    ) {
+      const lastMsg = chat.messages[chat.messages.length - 1];
+      console.log('Last message:', { sender: lastMsg.sender, text: lastMsg.text.substring(0, 50) });
       
       if (lastMsg.sender === 'ai') {
-        // Stop any ongoing listening when bot starts speaking
-        if (voice.isListening) {
-          voice.stopContinuousListening();
+        if (hasUserInteracted) {
+          console.log('✅ All conditions met - attempting to speak AI message');
+          // Stop any ongoing listening before speaking
+          if (voice.isListening) {
+            voice.stopContinuousListening();
+          }
+          voice.speak(lastMsg.text);
+        } else {
+          console.log('⏳ Waiting for user interaction before speaking');
         }
-        console.log('Attempting to speak AI message');
-        voice.speak(lastMsg.text);
       }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat.messages, voice.settings.enabled, voice.settings.autoPlay, voice.isSynthesisSupported]);
+    }  }, [chat.messages, voice]);
+
   const handleSendMessage = async (text: string) => {
     // Stop any ongoing listening when user sends a message
     if (voice.isListening) {
@@ -125,6 +134,74 @@ function App() {
   const handleUpdateBookingField = (field: keyof BookingDetails, value: string) => {
     chat.updateBookingField(field, value);
   };
+
+  // Debug: Check speech service state on component mount
+  useEffect(() => {
+    console.log('=== SPEECH DEBUG INFO ===');
+    console.log('Speech Service State:', {
+      synthSupported: voice.isSynthesisSupported,
+      voiceEnabled: voice.settings.enabled,
+      autoPlay: voice.settings.autoPlay,
+      hasUserInteracted: voice.hasUserInteracted(),
+      messagesLength: chat.messages.length,
+      firstMessage: chat.messages[0]?.text?.substring(0, 50) || 'No messages yet'
+    });
+    
+    // Test if we can manually trigger speech after a delay
+    setTimeout(() => {
+      console.log('=== DELAYED SPEECH TEST ===');
+      console.log('User interaction check:', voice.hasUserInteracted());
+      if (voice.hasUserInteracted() && chat.messages.length > 0) {
+        const firstAIMessage = chat.messages.find(msg => msg.sender === 'ai');
+        if (firstAIMessage) {
+          console.log('Manually triggering speech for welcome message');
+          voice.speak(firstAIMessage.text);
+        }
+      }
+    }, 2000);
+  }, [chat.messages, voice]);
+  // Trigger user interaction on first click anywhere on the page
+  useEffect(() => {
+    const handleFirstClick = () => {
+      console.log('🎯 First click detected - triggering user interaction');
+      voice.triggerUserInteraction();
+      
+      // Try to speak the welcome message immediately after interaction
+      setTimeout(() => {
+        if (chat.messages.length > 0) {
+          const firstAIMessage = chat.messages.find(msg => msg.sender === 'ai');
+          if (firstAIMessage && voice.settings.enabled && voice.settings.autoPlay) {
+            console.log('🔊 Speaking welcome message after user interaction');
+            voice.speak(firstAIMessage.text);
+          }
+        }
+      }, 100);
+      
+      document.removeEventListener('click', handleFirstClick);
+    };
+    
+    document.addEventListener('click', handleFirstClick);
+    
+    return () => {
+      document.removeEventListener('click', handleFirstClick);
+    };
+  }, [voice, chat.messages]);
+  // Handle textbox focus - trigger user interaction and speak welcome message
+  const handleTextboxFocus = useCallback(() => {
+    console.log('🎯 Textbox focused - triggering user interaction and speech');
+    
+    // Trigger user interaction
+    voice.triggerUserInteraction();
+    
+    // Immediately try to speak the welcome message
+    if (chat.messages.length > 0 && voice.settings.enabled && voice.settings.autoPlay) {
+      const welcomeMessage = chat.messages.find(msg => msg.sender === 'ai');
+      if (welcomeMessage && !voice.isSpeaking) {
+        console.log('🔊 Speaking welcome message on textbox focus');
+        voice.speak(welcomeMessage.text);
+      }
+    }
+  }, [voice, chat.messages]);
 
   if (!groqService.isAvailable()) {
     return (
@@ -174,6 +251,7 @@ function App() {
               onDismissError={clearError}
               messagesEndRef={messagesEndRef}
               voiceEnabled={voice.settings.enabled}
+              onTextboxFocus={handleTextboxFocus}
             />
           </div>
         </div>{/* Right Section - Booking Form (50% width on desktop) */}

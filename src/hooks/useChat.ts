@@ -272,31 +272,47 @@ export function useChat(navigate: NavigateFunction) {  const [state, setState] =
     setState(prev => ({ ...prev, error: null }));
   }, []);  // Initialize auto voice conversation with AI
   const initializeAutoVoice = useCallback(() => {
+    console.log('=== initializeAutoVoice called ===', {
+      isAutoVoiceInitialized: isAutoVoiceInitialized.current,
+      isInitialized: state.isInitialized,
+      autoVoiceMode: state.autoVoiceMode
+    });
+    
     if (!isAutoVoiceInitialized.current && !state.isInitialized && state.autoVoiceMode) {
       isAutoVoiceInitialized.current = true;
       
       // Business-focused welcome message
       const welcomeMsg = "Hi! Welcome to SkyJumper — your spot for fun and adventure. I'm your booking assistant. Can I please have your name to get started?";
       
+      console.log('Adding welcome message via initializeAutoVoice');
       addMessage(welcomeMsg, 'ai');
       setState(prev => ({ ...prev, isInitialized: true }));
       
       return welcomeMsg;
+    } else {
+      console.log('Skipping initializeAutoVoice - already initialized or wrong conditions');
     }
     return null;
-  }, [addMessage, state.autoVoiceMode, state.isInitialized]);
-  // Initialize chat with default welcome message (regardless of auto voice mode)
+  }, [addMessage, state.autoVoiceMode, state.isInitialized]);  // Initialize chat with default welcome message (regardless of auto voice mode)
   const initializeChat = useCallback(() => {
+    console.log('=== initializeChat called ===', {
+      isInitialized: state.isInitialized,
+      isGeneralInitialized: isGeneralInitialized.current
+    });
+    
     if (!state.isInitialized && !isGeneralInitialized.current) {
       isGeneralInitialized.current = true;
       
       // Business-focused welcome message
       const welcomeMsg = "Hi! Welcome to SkyJumper — your spot for fun and adventure. I'm your booking assistant. Can I please have your name to get started?";
       
+      console.log('Adding welcome message via initializeChat');
       addMessage(welcomeMsg, 'ai');
       setState(prev => ({ ...prev, isInitialized: true }));
       
       return welcomeMsg;
+    } else {
+      console.log('Skipping initializeChat - already initialized');
     }
     return null;
   }, [addMessage, state.isInitialized]);

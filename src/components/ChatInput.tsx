@@ -9,6 +9,7 @@ interface ChatInputProps {
   waitingForName?: boolean;
   currentTranscript?: string;
   isAutoVoiceMode?: boolean;
+  onTextboxFocus?: () => void; // Add callback for when textbox is focused
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -17,7 +18,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   disabled = false,
   waitingForName = false,
   currentTranscript = '',
-  isAutoVoiceMode = false
+  isAutoVoiceMode = false,
+  onTextboxFocus
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [message, setMessage] = useState('');
@@ -42,8 +44,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       handleSubmit(e);
     }
-  };
-  const handleVoiceInput = (text: string) => {
+  };  const handleVoiceInput = (text: string) => {
     setMessage(text);
     if (textareaRef.current) {
       textareaRef.current.focus();
@@ -69,6 +70,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={onTextboxFocus} // Call the onTextboxFocus prop when the textarea is focused
             placeholder={
               isAutoVoiceMode 
                 ? (waitingForName ? 'Listening for your name...' : 'Listening for your message...') 
