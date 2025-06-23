@@ -2,8 +2,7 @@ import { useState, useCallback } from 'react';
 import { speechService } from '../services/speechService';
 import type { VoiceSettings } from '../types';
 
-export function useVoice() {
-  const [settings, setSettings] = useState<VoiceSettings>({
+export function useVoice() {  const [settings, setSettings] = useState<VoiceSettings>({
     enabled: true,
     autoPlay: true,
     voice: null,
@@ -59,9 +58,7 @@ export function useVoice() {
   const stopListening = useCallback(() => {
     // speechService.stopListening(); // Method doesn't exist - commented out
     setIsListening(false);
-  }, []);
-
-  const speak = useCallback(
+  }, []);  const speak = useCallback(
     async (text: string) => {
       if (!settings.enabled || !text.trim()) return;
 
@@ -71,7 +68,12 @@ export function useVoice() {
         await speechService.speak(text, settings);
       } catch (error: unknown) {
         console.error('Speech synthesis error:', error);
-        setError(error instanceof Error ? error.message : String(error));
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // Only show non-permission errors to user
+        if (!errorMessage.includes('not-allowed') && !errorMessage.includes('permission')) {
+          setError(errorMessage);
+        }
       } finally {
         setIsSpeaking(false);
       }

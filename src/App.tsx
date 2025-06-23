@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChatHeader } from './components/ChatHeader';
-import { MessageBubble } from './components/MessageBubble';
-import { TypingIndicator } from './components/TypingIndicator';
-import { ChatInput } from './components/ChatInput';
-import { ErrorMessage } from './components/ErrorMessage';
+import { ChatContainer } from './components/ChatContainer';
 import { BookingForm } from './components/BookingForm';
 import { useChat } from './hooks/useChat';
 import { useVoice } from './hooks/useVoice';
@@ -74,17 +71,27 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat.autoVoiceMode, voice.isSpeaking, voice.isListening, chat.messages, voice.isRecognitionSupported]);// Speak the latest AI message if voice is enabled
   useEffect(() => {
+    console.log('Voice settings check:', {
+      messagesLength: chat.messages.length,
+      voiceEnabled: voice.settings.enabled,
+      autoPlay: voice.settings.autoPlay,
+      synthSupported: voice.isSynthesisSupported
+    });
+
     if (
       chat.messages.length > 0 &&
       voice.settings.enabled &&
       voice.settings.autoPlay &&
       voice.isSynthesisSupported
     ) {      const lastMsg = chat.messages[chat.messages.length - 1];
+      console.log('Checking last message:', { sender: lastMsg.sender, text: lastMsg.text.substring(0, 50) });
+      
       if (lastMsg.sender === 'ai') {
         // Stop any ongoing listening when bot starts speaking
         if (voice.isListening) {
           voice.stopContinuousListening();
         }
+        console.log('Attempting to speak AI message');
         voice.speak(lastMsg.text);
       }
     }
@@ -142,9 +149,8 @@ function App() {
         </div>
       </div>
     );
-  }
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+  }  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col">
       {/* Header */}
       <ChatHeader 
         onClearChat={chat.clearMessages}
@@ -153,42 +159,26 @@ function App() {
         autoVoiceMode={chat.autoVoiceMode}
         onToggleAutoVoice={chat.toggleAutoVoiceMode}
       />      {/* Main Content - Responsive Layout */}
-      <div className="flex-1 flex flex-col lg:flex-row">        {/* Left Section - Chat (50% width on desktop) */}
-        <div className="flex-1 lg:w-1/2 flex flex-col h-[60vh] lg:h-[calc(100vh-80px)]">
-          <div className="flex-1 overflow-y-auto p-4 lg:p-6">
-            {showError && (
-              <ErrorMessage 
-                message={errorMessage}
-                onDismiss={clearError}
-              />
-            )}
-            
-            <div className="space-y-4 mb-4">
-              {chat.messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
-              ))}
-              
-              {chat.isLoading && <TypingIndicator />}
-            </div>
-            
-            <div ref={messagesEndRef} />
-          </div>
-          
-          {/* Chat Input at bottom of chat section */}
-          <div className="border-t border-gray-200">
-            <ChatInput
-              onSendMessage={handleSendMessage}
+      <div className="flex-1 flex flex-col lg:flex-row">
+        {/* Left Section - Chat (50% width on desktop) */}
+        <div className="flex-1 lg:w-1/2 flex flex-col h-[60vh] lg:h-[calc(100vh-152px)]">
+          <div className="flex-1 w-full p-4 lg:p-6 overflow-y-auto">            <ChatContainer
+              messages={chat.messages}
               isLoading={chat.isLoading}
-              disabled={chat.isLoading}
+              onSendMessage={handleSendMessage}
               waitingForName={chat.waitingForName}
               currentTranscript={currentTranscript}
               isAutoVoiceMode={chat.autoVoiceMode}
+              showError={!!showError}
+              errorMessage={errorMessage}
+              onDismissError={clearError}
+              messagesEndRef={messagesEndRef}
+              voiceEnabled={voice.settings.enabled}
             />
           </div>
-        </div>
-          {/* Right Section - Booking Form (50% width on desktop) */}
-        <div className="hidden lg:flex lg:w-1/2 flex-col border-l border-gray-200 bg-white/50 h-[calc(100vh-80px)]">
-          <div className="flex-1 w-full p-4 lg:p-6">
+        </div>{/* Right Section - Booking Form (50% width on desktop) */}
+        <div className="hidden lg:flex lg:w-1/2 flex-col border-l border-gray-200 bg-white/50 h-[calc(100vh-152px)]">
+          <div className="flex-1 w-full p-4 lg:p-6 overflow-y-auto">
             <BookingForm
               bookingData={chat.booking?.data || {}}
               onUpdateField={handleUpdateBookingField}
@@ -196,14 +186,28 @@ function App() {
           </div>
         </div>
       </div>
-        {/* Mobile: Bottom Booking Form (visible on small screens) */}
-      <div className="lg:hidden border-t border-gray-200 bg-white h-[40vh] overflow-hidden">
+        {/* Mobile: Bottom Booking Form (visible on small screens) */}      <div className="lg:hidden border-t border-gray-200 bg-white h-[40vh] overflow-hidden">
         <div className="h-full w-full">
           <BookingForm
             bookingData={chat.booking?.data || {}}
             onUpdateField={handleUpdateBookingField}
           />        </div>
       </div>
+      
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-4 px-6 text-center">
+        <p className="text-sm">
+          Developed by{' '}
+          <a 
+            href="https://www.exponentsolutions.ai/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-[#f58220] hover:text-orange-300 transition-colors duration-200 font-medium"
+          >
+            Exponent Solutions AI
+          </a>
+        </p>
+      </footer>
     </div>
   );
 }

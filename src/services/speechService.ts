@@ -54,18 +54,32 @@ class SpeechService {
   private selectedVoice: SpeechSynthesisVoice | null = null;
   private isVoicesLoaded: boolean = false;
   private retryCount: number = 0;
-  private readonly MAX_RETRIES: number = 3;
-  private isListening: boolean = false;
+  private readonly MAX_RETRIES: number = 3;  private isListening: boolean = false;
   private isSpeakerEnabled: boolean = true;
+  private hasUserInteracted: boolean = false;
   private silenceTimer: NodeJS.Timeout | null = null;
   private currentTranscript: string = '';
   private onSilenceCallback: ((transcript: string) => void) | null = null;
-
   constructor() {
     this.synthesis = window.speechSynthesis;
     this.recognition = this.createRecognition();
     this.loadVoices();
-  }  private createRecognition(): SpeechRecognition | null {
+    this.setupUserInteractionDetection();
+  }
+
+  private setupUserInteractionDetection() {
+    const handleUserInteraction = () => {
+      this.hasUserInteracted = true;
+      // Remove listeners after first interaction
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
+    };
+
+    document.addEventListener('click', handleUserInteraction, { once: true });
+    document.addEventListener('keydown', handleUserInteraction, { once: true });
+    document.addEventListener('touchstart', handleUserInteraction, { once: true });
+  }private createRecognition(): SpeechRecognition | null {
     const SpeechRecognition = window.SpeechRecognition || 
                              window.webkitSpeechRecognition || 
                              window.mozSpeechRecognition || 
@@ -288,10 +302,28 @@ class SpeechService {
 
   public isSpeakerOn(): boolean {
     return this.isSpeakerEnabled;
-  }
-  async speak(text: string, settings: VoiceSettings): Promise<void> {
+  }  async speak(text: string, settings: VoiceSettings): Promise<void> {
+    console.log('Speech synthesis attempt:', { 
+      text: text.substring(0, 50) + '...', 
+      hasUserInteracted: this.hasUserInteracted,
+      isSpeakerEnabled: this.isSpeakerEnabled,
+      synthesisSpeaking: this.synthesis?.speaking
+    });
+
     if (!this.isSpeakerEnabled) {
       console.log('Speaker is disabled, skipping speech synthesis.');
+      return;
+    }
+
+    // Check if speechSynthesis is available
+    if (!this.synthesis) {
+      console.warn('Speech synthesis not available');
+      return;
+    }
+
+    // Check for user interaction - required by browsers for speech synthesis
+    if (!this.hasUserInteracted) {
+      console.log('Waiting for user interaction before enabling speech synthesis. Call speechService.triggerUserInteraction() or click anywhere to enable.');
       return;
     }
 
@@ -316,17 +348,30 @@ class SpeechService {
     }
 
     return new Promise((resolve, reject) => {
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.voice = this.selectedVoice || settings.voice;
-      utterance.rate = settings.rate;
-      utterance.pitch = settings.pitch;
-      utterance.volume = settings.volume;
-      utterance.lang = settings.language;
+      try {
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.voice = this.selectedVoice || settings.voice;
+        utterance.rate = settings.rate;
+        utterance.pitch = settings.pitch;
+        utterance.volume = settings.volume;
+        utterance.lang = settings.language;
 
-      utterance.onend = () => resolve();
-      utterance.onerror = (event) => reject(event.error);
+        utterance.onend = () => resolve();        utterance.onerror = (event) => {
+          console.error('Speech synthesis error:', event.error);
+          // Don't reject for permission errors, just resolve silently
+          if (event.error === 'not-allowed' || String(event.error).includes('permission')) {
+            console.warn('Speech synthesis permission denied. Continuing without speech.');
+            resolve();
+          } else {
+            reject(new Error(`Speech synthesis failed: ${event.error}`));
+          }
+        };
 
-      this.synthesis.speak(utterance);
+        this.synthesis.speak(utterance);
+      } catch (error) {
+        console.error('Error creating speech utterance:', error);
+        reject(error);
+      }
     });
   }
 
@@ -547,7 +592,6 @@ class SpeechService {
       return false;
     }
   }
-
   // Request microphone permissions explicitly
   async requestMicrophonePermissions(): Promise<boolean> {
     try {
@@ -563,6 +607,33 @@ class SpeechService {
       return false;
     }
   }
+
+  // Check if user has interacted with the page (required for speech synthesis)
+  hasUserInteractionOccurred(): boolean {
+    return this.hasUserInteracted;
+  }
+  // Manually trigger user interaction (for testing)
+  triggerUserInteraction(): void {
+    this.hasUserInteracted = true;
+    console.log('User interaction manually triggered - speech synthesis now available');
+  }
+
+  // Debug method to check current state
+  getDebugInfo() {
+    return {
+      hasUserInteracted: this.hasUserInteracted,
+      isSpeakerEnabled: this.isSpeakerEnabled,
+      synthesisSpeaking: this.synthesis?.speaking || false,
+      voicesLoaded: this.isVoicesLoaded,
+      selectedVoice: this.selectedVoice?.name || 'none'
+    };
+  }
 }
 
 export const speechService = new SpeechService();
+
+// Expose to window for debugging
+if (typeof window !== 'undefined') {
+  (window as typeof window & { speechService: SpeechService }).speechService = speechService;
+  console.log('Speech service exposed to window.speechService for debugging');
+}

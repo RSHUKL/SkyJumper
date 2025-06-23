@@ -1,5 +1,6 @@
-import { Settings, Volume2, VolumeX, Headphones } from 'lucide-react';
+import { Settings, Volume2, VolumeX, Headphones, TestTube } from 'lucide-react';
 import logo from '../assets/happy-web-logo.png'; // adjust path based on your file structure
+import { speechService } from '../services/speechService';
 
 interface ChatHeaderProps {
   onClearChat: () => void;
@@ -43,8 +44,28 @@ export function ChatHeader({
               title={autoVoiceMode ? 'Disable auto voice conversation' : 'Enable auto voice conversation'}
             >
               <Headphones size={20} />
-            </button>
-          )}
+            </button>          )}
+
+          {/* Test Speech Button - for debugging */}
+          <button
+            onClick={() => {
+              console.log('Testing speech synthesis...');
+              speechService.triggerUserInteraction();
+              speechService.speak('This is a test of speech synthesis', {
+                enabled: true,
+                autoPlay: true,
+                voice: null,
+                rate: 0.7,
+                pitch: 1,
+                volume: 1,
+                language: 'en-US'
+              });
+            }}
+            className="p-2.5 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200 shadow-sm"
+            title="Test speech synthesis"
+          >
+            <TestTube size={20} />
+          </button>
 
           <button
             onClick={onToggleVoice}

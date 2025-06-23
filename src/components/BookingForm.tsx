@@ -90,29 +90,29 @@ export const BookingForm: React.FC<BookingFormProps> = ({ bookingData, onUpdateF
   const isFieldCompleted = (fieldKey: keyof BookingDetails) => {
     return bookingData[fieldKey]?.trim() ? true : false;
   };
-
   return (
-    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden h-full lg:h-auto flex flex-col w-full">      {/* Header */}
-      <div className="bg-gradient-to-r from-[#5e0aa1] to-[#f58220] p-4 lg:p-6 text-white flex-shrink-0">
-        <h2 className="text-lg lg:text-2xl font-bold mb-1 lg:mb-2">Booking Details</h2>
+    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden h-full flex flex-col w-full">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-[#5e0aa1] to-[#f58220] px-3 py-3 lg:px-4 lg:py-4 text-white flex-shrink-0">
+        <h2 className="text-base lg:text-xl font-bold mb-1">Booking Details</h2>
         <p className="text-white/90 text-xs lg:text-sm">Information collected from our conversation</p>
         
         {/* Progress Bar */}
-        <div className="mt-3 lg:mt-4">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-xs lg:text-sm font-medium">Completion Progress</span>
-            <span className="text-xs lg:text-sm font-bold">{getCompletionPercentage()}%</span>
+        <div className="mt-2 lg:mt-3">
+          <div className="flex justify-between items-center mb-1.5">
+            <span className="text-xs font-medium">Completion Progress</span>
+            <span className="text-xs font-bold">{getCompletionPercentage()}%</span>
           </div>
-          <div className="w-full bg-white/20 rounded-full h-1.5 lg:h-2">
+          <div className="w-full bg-white/20 rounded-full h-1.5">
             <div 
-              className="bg-white h-1.5 lg:h-2 rounded-full transition-all duration-500 ease-out"
+              className="bg-white h-1.5 rounded-full transition-all duration-500 ease-out"
               style={{ width: `${getCompletionPercentage()}%` }}
             ></div>
-          </div>
-        </div>
-      </div>{/* Form Fields */}
-      <div className="flex-1 p-4 lg:p-6 space-y-4 overflow-y-auto">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-3 lg:gap-4">
+          </div>        </div>
+      </div>
+      {/* Form Fields */}
+      <div className="flex-1 p-3 lg:p-4 space-y-3 lg:space-y-4 overflow-y-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-3">
           {fields.map((field) => {
             const Icon = field.icon;
             const isCompleted = isFieldCompleted(field.key);
