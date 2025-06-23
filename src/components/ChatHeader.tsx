@@ -1,13 +1,21 @@
-import { Settings, Volume2, VolumeX } from 'lucide-react';
+import { Settings, Volume2, VolumeX, Headphones } from 'lucide-react';
 import logo from '../assets/happy-web-logo.png'; // adjust path based on your file structure
 
 interface ChatHeaderProps {
   onClearChat: () => void;
   voiceEnabled: boolean;
   onToggleVoice: () => void;
+  autoVoiceMode?: boolean;
+  onToggleAutoVoice?: () => void;
 }
 
-export function ChatHeader({ onClearChat, voiceEnabled, onToggleVoice }: ChatHeaderProps) {
+export function ChatHeader({ 
+  onClearChat, 
+  voiceEnabled, 
+  onToggleVoice, 
+  autoVoiceMode = false, 
+  onToggleAutoVoice 
+}: ChatHeaderProps) {
   return (
     <div className="bg-white/95 backdrop-blur-sm border-b border-[#5e0aa1]/20 p-4 shadow-sm">
       <div className="flex items-center justify-between">
@@ -23,9 +31,21 @@ export function ChatHeader({ onClearChat, voiceEnabled, onToggleVoice }: ChatHea
               <p className="text-sm text-[#5e0aa1]/70">Conversational AI with voice support</p>
             </div>
           </div>
-        </div>
+        </div>        <div className="flex items-center gap-3">
+          {onToggleAutoVoice && (
+            <button
+              onClick={onToggleAutoVoice}
+              className={`p-2.5 rounded-lg transition-all duration-200 shadow-sm ${
+                autoVoiceMode 
+                  ? 'bg-green-500 text-white hover:bg-green-600' 
+                  : 'bg-gray-100 text-[#5e0aa1]/50 hover:bg-gray-200'
+              }`}
+              title={autoVoiceMode ? 'Disable auto voice conversation' : 'Enable auto voice conversation'}
+            >
+              <Headphones size={20} />
+            </button>
+          )}
 
-        <div className="flex items-center gap-3">
           <button
             onClick={onToggleVoice}
             className={`p-2.5 rounded-lg transition-all duration-200 shadow-sm ${

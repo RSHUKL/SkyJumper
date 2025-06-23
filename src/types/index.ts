@@ -30,6 +30,9 @@ export interface ChatState {
   error: string | null;
   userName: string | null;
   waitingForName: boolean;
+  waitingForNameConfirmation: boolean;
+  autoVoiceMode: boolean;
+  isInitialized: boolean;
   booking: BookingState | null;
 }
 
@@ -42,13 +45,18 @@ export interface APIError {
 export interface BookingDetails {
   name: string;
   phone: string;
-  email?: string;
-  slotTime: string;
-  bookingDate: string;
+  eventType: string;
+  numberOfGuests: string;
+  ageGroup: string;
+  location: string;
+  eventDate: string;
+  timeSlot: string;
+  theme: string;
+  specialRequirements: string;
   [key: string]: string;
 }
 
-export type BookingStep = 'location' | 'name' | 'phone' | 'slotTime' | 'bookingDate' | 'done';
+export type BookingStep = 'name' | 'phone' | 'eventType' | 'numberOfGuests' | 'ageGroup' | 'location' | 'eventDate' | 'timeSlot' | 'theme' | 'specialRequirements' | 'done';
 
 export interface BookingState {
   step: BookingStep;

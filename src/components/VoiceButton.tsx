@@ -26,7 +26,6 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
     isSpeakerOn,
     toggleSpeaker
   } = useVoice();
-
   const [showTooltip, setShowTooltip] = useState(false);
 
   // Clean and sanitize text
@@ -97,13 +96,12 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
 
   return (
     <div className="flex items-center gap-2 relative">
-      {/* Speaker Toggle Button */}
-      {isSynthesisSupported && (
+      {/* Speaker Toggle Button */}      {isSynthesisSupported && (
         <button
           onClick={toggleSpeaker}
           className={`p-2 rounded-full transition-colors ${
             isSpeakerOn() 
-              ? 'f58220 hover:bg-orange-600 text-gray-600' 
+              ? 'bg-[#f58220] hover:bg-orange-600 text-white' 
               : 'bg-gray-300 hover:bg-gray-400 text-gray-600'
           }`}
           title={isSpeakerOn() ? 'Turn speaker off' : 'Turn speaker on'}
@@ -116,8 +114,7 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
         </button>
       )}
 
-      {/* Voice Input Button */}
-      <button
+      {/* Voice Input Button */}      <button
         onClick={handleClick}
         disabled={disabled}
         className={`p-2 rounded-full transition-colors ${
@@ -125,7 +122,7 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
             ? 'bg-red-500 hover:bg-red-600 text-white'
             : isSpeaking
             ? 'bg-green-500 hover:bg-green-600 text-white'
-            : 'f58220 hover:bg-orange-600 text-gray-600'
+            : 'bg-[#f58220] hover:bg-orange-600 text-white'
         } ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
         title={isListening ? 'Click to stop listening' : 'Click to start voice input'}
       >

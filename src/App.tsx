@@ -1,47 +1,104 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChatHeader } from './components/ChatHeader';
 import { MessageBubble } from './components/MessageBubble';
 import { TypingIndicator } from './components/TypingIndicator';
 import { ChatInput } from './components/ChatInput';
 import { ErrorMessage } from './components/ErrorMessage';
-import { WelcomeMessage } from './components/WelcomeMessage';
+import { BookingForm } from './components/BookingForm';
 import { useChat } from './hooks/useChat';
 import { useVoice } from './hooks/useVoice';
 import { groqService } from './services/groqService';
+import type { BookingDetails } from './types';
 
 function App() {
   const navigate = useNavigate();
   const chat = useChat(navigate);
   const voice = useVoice();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [currentTranscript, setCurrentTranscript] = useState('');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
-
   useEffect(() => {
     scrollToBottom();
-  }, [chat.messages, chat.isLoading]);
-
-  // Speak the latest AI message if voice is enabled
+  }, [chat.messages, chat.isLoading]);  // Initialize auto voice conversation on first load
+  useEffect(() => {
+    const initializeWithPermissions = async () => {
+      if (!chat.isInitialized && chat.autoVoiceMode && voice.isSynthesisSupported && voice.isRecognitionSupported) {
+        // Check microphone permissions first
+        const hasPermission = await voice.checkMicrophonePermissions();
+        if (!hasPermission) {
+          // Try to request permissions
+          const granted = await voice.requestMicrophonePermissions();
+          if (!granted) {
+            console.warn('Microphone permissions denied, auto voice mode may not work properly');
+          }
+        }
+        
+        const welcomeMessage = chat.initializeAutoVoice();
+        if (welcomeMessage) {
+          // Don't speak here - let the speaking useEffect handle it
+        }
+      }
+    };
+    
+    initializeWithPermissions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.isInitialized, chat.autoVoiceMode, voice.isSynthesisSupported, voice.isRecognitionSupported]);
+  // Handle automatic voice flow: when bot finishes speaking, start listening
+  useEffect(() => {
+    if (chat.autoVoiceMode && !voice.isSpeaking && !voice.isListening && chat.messages.length > 0) {
+      const lastMessage = chat.messages[chat.messages.length - 1];
+      
+      // If the last message was from AI and we're not already listening, start continuous listening
+      if (lastMessage.sender === 'ai' && voice.isRecognitionSupported) {
+        voice.startContinuousListening({
+          onResult: (transcript, isFinal) => {
+            if (!isFinal) {
+              setCurrentTranscript(transcript);
+            }
+          },
+          onSilence: (transcript) => {
+            if (transcript.trim()) {
+              setCurrentTranscript('');
+              handleSendMessage(transcript);
+            }
+          },
+          onError: (error) => {
+            console.error('Continuous listening error:', error);
+          }
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.autoVoiceMode, voice.isSpeaking, voice.isListening, chat.messages, voice.isRecognitionSupported]);// Speak the latest AI message if voice is enabled
   useEffect(() => {
     if (
       chat.messages.length > 0 &&
       voice.settings.enabled &&
       voice.settings.autoPlay &&
       voice.isSynthesisSupported
-    ) {
-      const lastMsg = chat.messages[chat.messages.length - 1];
+    ) {      const lastMsg = chat.messages[chat.messages.length - 1];
       if (lastMsg.sender === 'ai') {
+        // Stop any ongoing listening when bot starts speaking
+        if (voice.isListening) {
+          voice.stopContinuousListening();
+        }
         voice.speak(lastMsg.text);
       }
     }
-  }, [chat.messages, voice.settings, voice.isSynthesisSupported, voice.speak]);
-
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.messages, voice.settings.enabled, voice.settings.autoPlay, voice.isSynthesisSupported]);
   const handleSendMessage = async (text: string) => {
+    // Stop any ongoing listening when user sends a message
+    if (voice.isListening) {
+      voice.stopContinuousListening();
+    }
+    
     await chat.sendMessage(text);
-    // Do NOT call voice.speak here; useEffect will handle it.
+    // Note: The useEffect will handle speaking the AI response
   };
 
   const handleToggleVoice = () => {
@@ -57,6 +114,10 @@ function App() {
   const clearError = () => {
     chat.clearError();
     voice.clearError();
+  };
+
+  const handleUpdateBookingField = (field: keyof BookingDetails, value: string) => {
+    chat.updateBookingField(field, value);
   };
 
   if (!groqService.isAvailable()) {
@@ -83,18 +144,19 @@ function App() {
       </div>
     );
   }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      <div className="max-w-4xl mx-auto h-screen flex flex-col">
-        <ChatHeader 
-          onClearChat={chat.clearMessages}
-          voiceEnabled={voice.settings.enabled}
-          onToggleVoice={handleToggleVoice}
-        />
-        
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-4">
+      {/* Header */}
+      <ChatHeader 
+        onClearChat={chat.clearMessages}
+        voiceEnabled={voice.settings.enabled}
+        onToggleVoice={handleToggleVoice}
+        autoVoiceMode={chat.autoVoiceMode}
+        onToggleAutoVoice={chat.toggleAutoVoiceMode}
+      />      {/* Main Content - Responsive Layout */}
+      <div className="flex-1 flex flex-col lg:flex-row">        {/* Left Section - Chat (50% width on desktop) */}
+        <div className="flex-1 lg:w-1/2 flex flex-col h-[60vh] lg:h-[calc(100vh-80px)]">
+          <div className="flex-1 overflow-y-auto p-4 lg:p-6">
             {showError && (
               <ErrorMessage 
                 message={errorMessage}
@@ -102,29 +164,46 @@ function App() {
               />
             )}
             
-            {chat.messages.length === 0 ? (
-              <WelcomeMessage />
-            ) : (
-              <div className="space-y-4">
-                {chat.messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} />
-                ))}
-                
-                {chat.isLoading && <TypingIndicator />}
-              </div>
-            )}
+            <div className="space-y-4 mb-4">
+              {chat.messages.map((message) => (
+                <MessageBubble key={message.id} message={message} />
+              ))}
+              
+              {chat.isLoading && <TypingIndicator />}
+            </div>
             
             <div ref={messagesEndRef} />
           </div>
+          
+          {/* Chat Input at bottom of chat section */}
+          <div className="border-t border-gray-200">
+            <ChatInput
+              onSendMessage={handleSendMessage}
+              isLoading={chat.isLoading}
+              disabled={chat.isLoading}
+              waitingForName={chat.waitingForName}
+              currentTranscript={currentTranscript}
+              isAutoVoiceMode={chat.autoVoiceMode}
+            />
+          </div>
         </div>
-        
-        <ChatInput
-          onSendMessage={handleSendMessage}
-          isLoading={chat.isLoading}
-          disabled={chat.isLoading}
-          waitingForName={chat.waitingForName}
-          userName={chat.userName}
-        />
+          {/* Right Section - Booking Form (50% width on desktop) */}
+        <div className="hidden lg:flex lg:w-1/2 flex-col border-l border-gray-200 bg-white/50 h-[calc(100vh-80px)]">
+          <div className="flex-1 w-full p-4 lg:p-6">
+            <BookingForm
+              bookingData={chat.booking?.data || {}}
+              onUpdateField={handleUpdateBookingField}
+            />
+          </div>
+        </div>
+      </div>
+        {/* Mobile: Bottom Booking Form (visible on small screens) */}
+      <div className="lg:hidden border-t border-gray-200 bg-white h-[40vh] overflow-hidden">
+        <div className="h-full w-full">
+          <BookingForm
+            bookingData={chat.booking?.data || {}}
+            onUpdateField={handleUpdateBookingField}
+          />        </div>
       </div>
     </div>
   );
