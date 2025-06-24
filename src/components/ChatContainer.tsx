@@ -94,11 +94,21 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
             onDismiss={onDismissError}
           />
         )}
-        
-        <div className="space-y-3 lg:space-y-4 mb-4">
-          {messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))}
+          <div className="space-y-3 lg:space-y-4 mb-4">
+          {messages.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-gray-500 text-sm lg:text-base mb-2">
+                👋 Welcome to SkyJumper!
+              </div>
+              <div className="text-gray-400 text-xs lg:text-sm">
+                Click on "Type your message..." below to start your booking
+              </div>
+            </div>
+          ) : (
+            messages.map((message) => (
+              <MessageBubble key={message.id} message={message} />
+            ))
+          )}
           
           {isLoading && <TypingIndicator />}
         </div>

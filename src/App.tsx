@@ -19,28 +19,10 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
   useEffect(() => {
-    scrollToBottom();
-  }, [chat.messages, chat.isLoading]);  // Initialize chat on first load - run only once
-  useEffect(() => {
-    const initializeChat = async () => {
-      console.log('=== CHAT INITIALIZATION CHECK ===', {
-        isInitialized: chat.isInitialized,
-        autoVoiceMode: chat.autoVoiceMode,
-        messagesLength: chat.messages.length
-      });
-        if (!chat.isInitialized) {
-        console.log('Initializing chat...');
-        // Always use the same initialization regardless of voice mode
-        console.log('Calling initializeChat...');
-        chat.initializeChat();
-      } else {
-        console.log('Chat already initialized, skipping...');
-      }
-    };
-      initializeChat();
-    // Only depend on isInitialized to prevent multiple runs
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat.isInitialized]);
+    scrollToBottom();  }, [chat.messages, chat.isLoading]);
+
+  // Chat initialization removed - will be triggered on textbox focus
+
   // Handle automatic voice flow: when bot finishes speaking, start listening
   useEffect(() => {
     if (chat.autoVoiceMode && !voice.isSpeaking && !voice.isListening && chat.messages.length > 0) {
@@ -158,50 +140,35 @@ function App() {
           voice.speak(firstAIMessage.text);
         }
       }
-    }, 2000);
-  }, [chat.messages, voice]);
-  // Trigger user interaction on first click anywhere on the page
-  useEffect(() => {
-    const handleFirstClick = () => {
-      console.log('🎯 First click detected - triggering user interaction');
+    }, 2000);  }, [chat.messages, voice]);
+
+  // Handle textbox focus - initialize chat and trigger speech
+  const handleTextboxFocus = useCallback(() => {
+    console.log('🎯 Textbox focused - checking if chat needs initialization');
+    
+    // Initialize chat if not already done
+    if (!chat.isInitialized) {
+      console.log('Initializing chat on textbox focus...');
+      chat.initializeChat();
+      
+      // Trigger user interaction for speech
       voice.triggerUserInteraction();
       
-      // Try to speak the welcome message immediately after interaction
+      // Speak the welcome message after a short delay to ensure it's added to messages
       setTimeout(() => {
-        if (chat.messages.length > 0) {
-          const firstAIMessage = chat.messages.find(msg => msg.sender === 'ai');
-          if (firstAIMessage && voice.settings.enabled && voice.settings.autoPlay) {
-            console.log('🔊 Speaking welcome message after user interaction');
-            voice.speak(firstAIMessage.text);
+        if (chat.messages.length > 0 && voice.settings.enabled && voice.settings.autoPlay) {
+          const welcomeMessage = chat.messages.find(msg => msg.sender === 'ai');
+          if (welcomeMessage && !voice.isSpeaking) {
+            console.log('🔊 Speaking welcome message on textbox focus');
+            voice.speak(welcomeMessage.text);
           }
         }
       }, 100);
-      
-      document.removeEventListener('click', handleFirstClick);
-    };
-    
-    document.addEventListener('click', handleFirstClick);
-    
-    return () => {
-      document.removeEventListener('click', handleFirstClick);
-    };
-  }, [voice, chat.messages]);
-  // Handle textbox focus - trigger user interaction and speak welcome message
-  const handleTextboxFocus = useCallback(() => {
-    console.log('🎯 Textbox focused - triggering user interaction and speech');
-    
-    // Trigger user interaction
-    voice.triggerUserInteraction();
-    
-    // Immediately try to speak the welcome message
-    if (chat.messages.length > 0 && voice.settings.enabled && voice.settings.autoPlay) {
-      const welcomeMessage = chat.messages.find(msg => msg.sender === 'ai');
-      if (welcomeMessage && !voice.isSpeaking) {
-        console.log('🔊 Speaking welcome message on textbox focus');
-        voice.speak(welcomeMessage.text);
-      }
+    } else {
+      console.log('Chat already initialized, triggering user interaction only');
+      voice.triggerUserInteraction();
     }
-  }, [voice, chat.messages]);
+  }, [voice, chat]);
 
   if (!groqService.isAvailable()) {
     return (
