@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChatHeader } from './components/ChatHeader';
 import { ChatContainer } from './components/ChatContainer';
@@ -22,34 +22,56 @@ function App() {
     scrollToBottom();  }, [chat.messages, chat.isLoading]);
 
   // Chat initialization removed - will be triggered on textbox focus
-
   // Handle automatic voice flow: when bot finishes speaking, start listening
   useEffect(() => {
-    if (chat.autoVoiceMode && !voice.isSpeaking && !voice.isListening && chat.messages.length > 0) {
+    console.log('=== AUTO VOICE FLOW CHECK ===', {
+      voiceEnabled: voice.settings.enabled,
+      isSpeaking: voice.isSpeaking,
+      isListening: voice.isListening,
+      messagesLength: chat.messages.length,
+      hasUserInteracted: voice.hasUserInteracted()
+    });
+
+    // Start listening automatically after AI finishes speaking (if voice is enabled and user has interacted)
+    if (
+      voice.settings.enabled &&
+      !voice.isSpeaking &&
+      !voice.isListening &&
+      chat.messages.length > 0 &&
+      voice.hasUserInteracted()
+    ) {
       const lastMessage = chat.messages[chat.messages.length - 1];
       
-      // If the last message was from AI and we're not already listening, start continuous listening
+      // If the last message was from AI, start listening for user response
       if (lastMessage.sender === 'ai' && voice.isRecognitionSupported) {
+        console.log('🎤 AI finished speaking, starting automatic listening...');
+        
+        // Start listening with 5-second silence timeout
         voice.startContinuousListening({
           onResult: (transcript, isFinal) => {
             if (!isFinal) {
               setCurrentTranscript(transcript);
+              console.log('Interim transcript:', transcript);
             }
           },
           onSilence: (transcript) => {
             if (transcript.trim()) {
+              console.log('🔊 5-second silence detected, submitting:', transcript);
               setCurrentTranscript('');
               handleSendMessage(transcript);
+            } else {
+              console.log('Empty transcript after silence, continuing to listen...');
             }
           },
           onError: (error) => {
             console.error('Continuous listening error:', error);
+            setCurrentTranscript('');
           }
         });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat.autoVoiceMode, voice.isSpeaking, voice.isListening, chat.messages, voice.isRecognitionSupported]);  // Consolidated speech logic - speak AI messages when conditions are met
+  }, [voice.isSpeaking, voice.isListening, chat.messages, voice.settings.enabled]);// Consolidated speech logic - speak AI messages when conditions are met
   useEffect(() => {
     const hasUserInteracted = voice.hasUserInteracted();
     
@@ -76,12 +98,28 @@ function App() {
       
       if (lastMsg.sender === 'ai') {
         if (hasUserInteracted) {
-          console.log('✅ All conditions met - attempting to speak AI message');
-          // Stop any ongoing listening before speaking
-          if (voice.isListening) {
-            voice.stopContinuousListening();
+          // Only speak the welcome message once
+          if (
+            chat.messages.length === 1 &&
+            lastMsg.text.toLowerCase().includes('welcome') &&
+            hasSpokenWelcomeRef.current
+          ) {
+            return;
           }
-          voice.speak(lastMsg.text);
+          // For all other AI messages, or if not already spoken
+          if (!voice.isSpeaking) {
+            if (
+              chat.messages.length === 1 &&
+              lastMsg.text.toLowerCase().includes('welcome')
+            ) {
+              if (!hasSpokenWelcomeRef.current) {
+                voice.speak(lastMsg.text);
+                hasSpokenWelcomeRef.current = true;
+              }
+            } else {
+              voice.speak(lastMsg.text);
+            }
+          }
         } else {
           console.log('⏳ Waiting for user interaction before speaking');
         }
@@ -113,9 +151,16 @@ function App() {
     voice.clearError();
   };
 
-  const handleUpdateBookingField = (field: keyof BookingDetails, value: string) => {
+  const user = useMemo(() => ({
+    name: 'Priya Sharma',
+    phone: '+919876543210',
+    email: 'priya.sharma@email.com',
+    isLoggedIn: true
+  }), []);
+
+  const handleUpdateBookingField = useCallback((field: keyof BookingDetails, value: string) => {
     chat.updateBookingField(field, value);
-  };
+  }, [chat]);
 
   // Debug: Check speech service state on component mount
   useEffect(() => {
@@ -128,39 +173,39 @@ function App() {
       messagesLength: chat.messages.length,
       firstMessage: chat.messages[0]?.text?.substring(0, 50) || 'No messages yet'
     });
-    
-    // Test if we can manually trigger speech after a delay
-    setTimeout(() => {
-      console.log('=== DELAYED SPEECH TEST ===');
-      console.log('User interaction check:', voice.hasUserInteracted());
-      if (voice.hasUserInteracted() && chat.messages.length > 0) {
-        const firstAIMessage = chat.messages.find(msg => msg.sender === 'ai');
-        if (firstAIMessage) {
-          console.log('Manually triggering speech for welcome message');
-          voice.speak(firstAIMessage.text);
-        }
-      }
-    }, 2000);  }, [chat.messages, voice]);
+    // Removed delayed speech test to prevent duplicate welcome message speech
+  }, [chat.messages, voice]);
 
   // Handle textbox focus - initialize chat and trigger speech
+  const hasInitializedRef = useRef(false);
+  const hasSpokenWelcomeRef = useRef(false);
+
   const handleTextboxFocus = useCallback(() => {
     console.log('🎯 Textbox focused - checking if chat needs initialization');
-    
-    // Initialize chat if not already done
+    // Prevent repeated initialization
+    if (hasInitializedRef.current) {
+      console.log('Already initialized, only triggering user interaction');
+      voice.triggerUserInteraction();
+      return;
+    }
     if (!chat.isInitialized) {
       console.log('Initializing chat on textbox focus...');
       chat.initializeChat();
-      
-      // Trigger user interaction for speech
       voice.triggerUserInteraction();
-      
+      hasInitializedRef.current = true;
       // Speak the welcome message after a short delay to ensure it's added to messages
       setTimeout(() => {
-        if (chat.messages.length > 0 && voice.settings.enabled && voice.settings.autoPlay) {
+        if (
+          chat.messages.length > 0 &&
+          voice.settings.enabled &&
+          voice.settings.autoPlay &&
+          !hasSpokenWelcomeRef.current
+        ) {
           const welcomeMessage = chat.messages.find(msg => msg.sender === 'ai');
           if (welcomeMessage && !voice.isSpeaking) {
             console.log('🔊 Speaking welcome message on textbox focus');
             voice.speak(welcomeMessage.text);
+            hasSpokenWelcomeRef.current = true;
           }
         }
       }, 100);
@@ -169,6 +214,15 @@ function App() {
       voice.triggerUserInteraction();
     }
   }, [voice, chat]);
+
+  // Prefill booking form if user is logged in and booking is empty
+  useEffect(() => {
+    if (user.isLoggedIn && chat.booking?.data) {
+      if (!chat.booking.data.name && user.name) handleUpdateBookingField('name', user.name);
+      if (!chat.booking.data.phone && user.phone) handleUpdateBookingField('phone', user.phone);
+      if (!chat.booking.data.email && user.email) handleUpdateBookingField('email', user.email);
+    }
+  }, [user, chat.booking, handleUpdateBookingField]);
 
   if (!groqService.isAvailable()) {
     return (
@@ -249,7 +303,7 @@ function App() {
             rel="noopener noreferrer"
             className="text-[#f58220] hover:text-orange-300 transition-colors duration-200 font-medium"
           >
-            Exponent Solutions AI
+            Exponent Solutions 
           </a>
         </p>
       </footer>
