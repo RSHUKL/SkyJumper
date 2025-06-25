@@ -104,14 +104,6 @@ INFO CENTER & OFFERS:
 AVAILABLE DATA:
 ${currentData}
 
-CONVERSATION EXAMPLES:
-- First message: "Hi! Welcome to SkyJumper — your spot for fun and adventure. I'm your booking assistant. Can I please have your name to get started?"
-- Name confirmation: "I heard your name is Priya. Is the spelling correct?"
-- If user says no: "Could you please spell it out for me?"
-- Getting phone: "Thanks Priya! What's your phone number?"
-- Event type: "What type of event are you planning?"
-- Offers: "By the way, we have a special birthday package this month! Would you like to hear more?"
-
 ${context?.isFirstMessage ? 'Start with the greeting and ask for their name.' : ''}
 ${context?.needsName ? 'Ask for their name politely.' : ''}
 `;

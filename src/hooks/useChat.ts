@@ -250,8 +250,8 @@ export function useChat(navigate: NavigateFunction) {  const [state, setState] =
 
         if (isBookingComplete(response)) {
           setTimeout(() => {
-            console.log('Booking completed, redirecting...');
-            navigate('/login');
+            clearMessages();
+            initializeChat();
           }, 3000);
         }
       }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChatHeader } from './components/ChatHeader';
 import { ChatContainer } from './components/ChatContainer';
@@ -6,14 +6,14 @@ import { BookingForm } from './components/BookingForm';
 import { useChat } from './hooks/useChat';
 import { useVoice } from './hooks/useVoice';
 import { groqService } from './services/groqService';
-import type { BookingDetails, Message } from './types';
+import type { BookingDetails } from './types';
 
 function App() {
   const navigate = useNavigate();
   const chat = useChat(navigate);
   const voice = useVoice();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [currentTranscript, setCurrentTranscript] = useState('');
+  const [currentTranscript] = useState('');
   const spokenMessagesRef = useRef(new Set());
 
   const scrollToBottom = () => {
@@ -64,13 +64,6 @@ function App() {
     voice.clearError();
   };
 
-  const user = useMemo(() => ({
-    name: 'Priya Sharma',
-    phone: '+919876543210',
-    email: 'priya.sharma@email.com',
-    isLoggedIn: true
-  }), []);
-
   const handleUpdateBookingField = useCallback((field: keyof BookingDetails, value: string) => {
     chat.updateBookingField(field, value);
   }, [chat]);
@@ -90,8 +83,6 @@ function App() {
   }, [chat.messages, voice]);
 
   // Handle textbox focus - initialize chat and trigger speech
-  const hasInitializedRef = useRef(false);
-  const hasSpokenWelcomeRef = useRef(false);
 
   const handleTextboxFocus = useCallback(() => {
     if (!chat.isInitialized) {
@@ -99,15 +90,6 @@ function App() {
       voice.triggerUserInteraction();
     }
   }, [voice, chat]);
-
-  // Prefill booking form if user is logged in and booking is empty
-  useEffect(() => {
-    if (user.isLoggedIn && chat.booking?.data) {
-      if (!chat.booking.data.name && user.name) handleUpdateBookingField('name', user.name);
-      if (!chat.booking.data.phone && user.phone) handleUpdateBookingField('phone', user.phone);
-      if (!chat.booking.data.email && user.email) handleUpdateBookingField('email', user.email);
-    }
-  }, [user, chat.booking, handleUpdateBookingField]);
 
   if (!groqService.isAvailable()) {
     return (
