@@ -146,6 +146,7 @@ function App() {
         <div className="hidden lg:flex lg:w-1/2 flex-col border-l border-gray-200 bg-white/50 h-[calc(100vh-152px)]">
           <div className="flex-1 w-full p-4 lg:p-6 overflow-y-auto">
             <BookingForm
+              key={chat.booking ? 'booking-active' : 'booking-empty'}
               bookingData={chat.booking?.data || {}}
               onUpdateField={handleUpdateBookingField}
             />
@@ -155,6 +156,7 @@ function App() {
         {/* Mobile: Bottom Booking Form (visible on small screens) */}      <div className="lg:hidden border-t border-gray-200 bg-white h-[40vh] overflow-hidden">
         <div className="h-full w-full">
           <BookingForm
+            key={chat.booking ? 'booking-active' : 'booking-empty-mobile'}
             bookingData={chat.booking?.data || {}}
             onUpdateField={handleUpdateBookingField}
           />        </div>

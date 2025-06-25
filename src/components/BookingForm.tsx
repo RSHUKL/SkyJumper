@@ -1,6 +1,7 @@
 import React from 'react';
 import { User, Phone, Calendar, MapPin, Clock, Users, Palette, MessageSquare, CheckCircle } from 'lucide-react';
 import type { BookingDetails } from '../types';
+import { generateBookingPDF } from '../services/pdfService';
 
 interface BookingFormProps {
   bookingData: Partial<BookingDetails>;
@@ -188,7 +189,11 @@ export const BookingForm: React.FC<BookingFormProps> = ({ bookingData, onUpdateF
         </div>
         
         {getCompletionPercentage() >= 80 && (
-          <button className="w-full mt-2 lg:mt-3 bg-gradient-to-r from-[#5e0aa1] to-[#f58220] text-white py-2.5 lg:py-3 rounded-lg font-semibold hover:shadow-lg transition-all duration-200 transform hover:scale-105 text-sm lg:text-base">
+          <button
+            className="w-full mt-2 lg:mt-3 bg-gradient-to-r from-[#5e0aa1] to-[#f58220] text-white py-2.5 lg:py-3 rounded-lg font-semibold hover:shadow-lg transition-all duration-200 transform hover:scale-105 text-sm lg:text-base"
+            onClick={() => generateBookingPDF(bookingData as BookingDetails)}
+            disabled={getCompletionPercentage() < 100}
+          >
             Complete Booking
           </button>
         )}
