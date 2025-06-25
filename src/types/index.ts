@@ -34,6 +34,7 @@ export interface ChatState {
   autoVoiceMode: boolean;
   isInitialized: boolean;
   booking: BookingState | null;
+  pendingUserName: string | null;
 }
 
 export interface APIError {

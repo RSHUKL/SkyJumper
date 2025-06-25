@@ -14,7 +14,8 @@ export function useChat(navigate: NavigateFunction) {  const [state, setState] =
     waitingForNameConfirmation: false,
     autoVoiceMode: false, // Changed to false by default so mic button is visible
     isInitialized: false,
-    booking: null
+    booking: null,
+    pendingUserName: null
   });
   const messageIdCounter = useRef(0);
   const conversationHistory = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
@@ -181,58 +182,81 @@ export function useChat(navigate: NavigateFunction) {  const [state, setState] =
   };
 
   const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim()) return null;    // Add user message
+    if (!text.trim()) return;
     addMessage(text.trim(), 'user');
-    
     setState(prev => ({ ...prev, error: null, isLoading: true }));
 
     try {
-      // Determine conversation context
-      const isFirstMessage = state.messages.length === 0;
-      const needsName = !state.userName;
-      
-      // Let the AI handle the conversation naturally
-      const response = await groqService.generateResponse(
-        conversationHistory.current, 
-        3, 
-        state.userName,
-        {
-          isFirstMessage,
-          needsName,
-          expectingBooking: false
+      if (state.waitingForNameConfirmation && state.pendingUserName) {
+        const confirmation = text.trim().toLowerCase();
+        if (['yes', 'yeah', 'yep', 'correct', 'right'].includes(confirmation)) {
+          const confirmedName = state.pendingUserName;
+          setState(prev => ({
+            ...prev,
+            userName: confirmedName,
+            waitingForNameConfirmation: false,
+            pendingUserName: null,
+            booking: {
+              step: 'phone',
+              data: { ...prev.booking?.data, name: confirmedName }
+            }
+          }));
+
+          const responseText = `Great! Your name is ${confirmedName}. To proceed with the booking, could you please provide your phone number?`;
+          addMessage(responseText, 'ai');
+          conversationHistory.current.push({ role: 'assistant', content: responseText });
+
+        } else {
+          setState(prev => ({ ...prev, waitingForNameConfirmation: false, pendingUserName: null }));
+          const responseText = "My apologies. Could you please spell out your name for me?";
+          addMessage(responseText, 'ai');
+          conversationHistory.current.push({ role: 'assistant', content: responseText });
         }
-      );      // Add AI response
-      const aiMessage = addMessage(response, 'ai');
-        
-      // Extract booking information from user message and AI response
-      const bookingInfo = extractBookingInfo(text.trim(), response);
-      
-      // Update state with extracted information
-      if (bookingInfo.name && !state.userName) {
-        setState(prev => ({ ...prev, userName: bookingInfo.name || null }));
+        setState(prev => ({ ...prev, isLoading: false }));
+        return;
       }
 
-      // Update booking state
-      setState(prev => ({
-        ...prev,
-        booking: {
-          step: prev.booking?.step || 'name',
-          data: { ...prev.booking?.data, ...bookingInfo }
-        }
-      }));
+      const isFirstMessage = state.messages.length <= 1;
+      const needsName = !state.userName;
 
-      // Handle booking completion
-      if (isBookingComplete(response)) {
-        // Trigger any PDF generation or redirect logic here
-        setTimeout(() => {
-          // You can add PDF generation logic here if needed
-          console.log('Booking completed, redirecting...');
-          navigate('/login');
-        }, 3000);
+      const response = await groqService.generateResponse(
+        conversationHistory.current,
+        3,
+        state.userName,
+        { isFirstMessage, needsName, expectingBooking: false }
+      );
+
+      const bookingInfo = extractBookingInfo(text.trim(), response);
+
+      if (bookingInfo.name && !state.userName && !state.pendingUserName) {
+        const newPendingName = bookingInfo.name;
+        setState(prev => ({
+          ...prev,
+          pendingUserName: newPendingName,
+          waitingForNameConfirmation: true
+        }));
+        const confirmationMsg = `I heard your name is ${bookingInfo.name}. Is the spelling correct?`;
+        addMessage(confirmationMsg, 'ai');
+        conversationHistory.current.push({ role: 'assistant', content: confirmationMsg });
+      } else {
+        addMessage(response, 'ai');
+        setState(prev => ({
+          ...prev,
+          booking: {
+            step: prev.booking?.step || 'name',
+            data: { ...prev.booking?.data, ...bookingInfo }
+          }
+        }));
+
+        if (isBookingComplete(response)) {
+          setTimeout(() => {
+            console.log('Booking completed, redirecting...');
+            navigate('/login');
+          }, 3000);
+        }
       }
 
       setState(prev => ({ ...prev, isLoading: false }));
-      return aiMessage;
 
     } catch (error: unknown) {
       console.error('Chat error:', error);
@@ -241,9 +265,8 @@ export function useChat(navigate: NavigateFunction) {  const [state, setState] =
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to get AI response'
       }));
-      return null;
     }
-  }, [addMessage, state.messages.length, state.userName, navigate]);
+  }, [addMessage, state.messages.length, state.userName, state.waitingForNameConfirmation, state.pendingUserName, navigate]);
 
   const clearMessages = useCallback(() => {
     setState(prev => ({
@@ -253,6 +276,7 @@ export function useChat(navigate: NavigateFunction) {  const [state, setState] =
       userName: null,
       waitingForName: false,
       waitingForNameConfirmation: false,
+      pendingUserName: null,
       isInitialized: false,
       booking: null
     }));
