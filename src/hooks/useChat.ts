@@ -69,6 +69,11 @@ export function useChat(navigate: NavigateFunction) {
       }
     }
     
+    // Fallback: If the user just types their name (e.g., 'Rajat Shukla')
+    if (!info.name && /^[A-Z][a-z]+( [A-Z][a-z]+)*$/.test(userText.trim())) {
+      info.name = userText.trim();
+    }
+    
     // Extract phone number (various formats)
     const phonePatterns = [
       /(?:\+91[\s-]?)?([6-9]\d{9})/,
@@ -248,7 +253,6 @@ export function useChat(navigate: NavigateFunction) {
     setState(prev => ({ ...prev, error: null, isLoading: true }));
 
     try {
-      const prevBookingData = state.booking?.data || {};
       const isFirstMessage = state.messages.length <= 1;
       const needsName = !state.userName;
 
@@ -260,63 +264,46 @@ export function useChat(navigate: NavigateFunction) {
       );
 
       const bookingInfo = extractBookingInfo(text.trim(), response);
-      const mergedBookingData = { ...prevBookingData, ...bookingInfo };
-
-      // Immediately set the name and autofill booking as soon as detected
-      if (bookingInfo.name) {
-        setState(prev => ({
-          ...prev,
-          userName: prev.userName ?? bookingInfo.name ?? null,
-          booking: {
-            step: 'phone',
-            data: { ...(prev.booking?.data || {}), name: bookingInfo.name }
-          }
-        }));
-        const nextPrompt = `Great! Your name is ${bookingInfo.name}. To proceed with the booking, could you please provide your phone number?`;
-        addMessage(nextPrompt, 'ai');
-        conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
-        return;
-      }
 
       addMessage(response, 'ai');
       setState(prev => ({
         ...prev,
         booking: {
           step: prev.booking?.step || 'name',
-          data: mergedBookingData
+          data: { ...(prev.booking?.data || {}), ...bookingInfo }
         }
       }));
 
       // Prompt for next missing field in order
-      if (mergedBookingData.phone && !mergedBookingData.eventType) {
+      if (bookingInfo.phone && !bookingInfo.eventType) {
         const nextPrompt = 'Thank you for sharing your phone number. What type of event would you like to book? (e.g., Birthday Party, Kitty Party, Corporate Event, etc.)';
         addMessage(nextPrompt, 'ai');
         conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
-      } else if (mergedBookingData.eventType && !mergedBookingData.numberOfGuests) {
+      } else if (bookingInfo.eventType && !bookingInfo.numberOfGuests) {
         const nextPrompt = 'How many guests are you expecting for the event?';
         addMessage(nextPrompt, 'ai');
         conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
-      } else if (mergedBookingData.numberOfGuests && !mergedBookingData.ageGroup) {
+      } else if (bookingInfo.numberOfGuests && !bookingInfo.ageGroup) {
         const nextPrompt = 'What is the age group of the guests? (e.g., Kids, Teens, Adults, Mixed)';
         addMessage(nextPrompt, 'ai');
         conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
-      } else if (mergedBookingData.ageGroup && !mergedBookingData.location) {
+      } else if (bookingInfo.ageGroup && !bookingInfo.location) {
         const nextPrompt = 'Which SkyJumper location would you prefer for your event?';
         addMessage(nextPrompt, 'ai');
         conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
-      } else if (mergedBookingData.location && !mergedBookingData.eventDate) {
+      } else if (bookingInfo.location && !bookingInfo.eventDate) {
         const nextPrompt = 'On which date would you like to book the event? (Please specify DD/MM/YYYY or describe)';
         addMessage(nextPrompt, 'ai');
         conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
-      } else if (mergedBookingData.eventDate && !mergedBookingData.timeSlot) {
+      } else if (bookingInfo.eventDate && !bookingInfo.timeSlot) {
         const nextPrompt = 'What time slot do you prefer for your event? (e.g., 10:00 AM - 12:00 PM)';
         addMessage(nextPrompt, 'ai');
         conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
-      } else if (mergedBookingData.timeSlot && !mergedBookingData.theme) {
+      } else if (bookingInfo.timeSlot && !bookingInfo.theme) {
         const nextPrompt = 'Do you have a theme preference for the event? (e.g., Superhero, Princess, Sports, etc.)';
         addMessage(nextPrompt, 'ai');
         conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
-      } else if (mergedBookingData.theme && !mergedBookingData.specialRequirements) {
+      } else if (bookingInfo.theme && !bookingInfo.specialRequirements) {
         const nextPrompt = 'Any special requirements or notes for your event?';
         addMessage(nextPrompt, 'ai');
         conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
