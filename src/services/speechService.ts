@@ -1,13 +1,21 @@
 import type { VoiceSettings } from '../types';
 
 interface SpeechRecognitionEvent extends Event {
+  resultIndex: number;
   results: {
+    length: number;
     [index: number]: {
+      isFinal: boolean;
       [index: number]: {
         transcript: string;
       };
     };
   };
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
 }
 
 declare global {
@@ -26,16 +34,16 @@ interface SpeechRecognition extends EventTarget {
   start(): void;
   stop(): void;
   abort(): void;
-  onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
-  onend: ((this: SpeechRecognition, ev: Event) => any) | null;
-  onerror: ((this: SpeechRecognition, ev: Event) => any) | null;
-  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
-  onaudiostart: ((this: SpeechRecognition, ev: Event) => any) | null;
-  onaudioend: ((this: SpeechRecognition, ev: Event) => any) | null;
-  onsoundstart: ((this: SpeechRecognition, ev: Event) => any) | null;
-  onsoundend: ((this: SpeechRecognition, ev: Event) => any) | null;
-  onspeechstart: ((this: SpeechRecognition, ev: Event) => any) | null;
-  onspeechend: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onstart: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onend: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onerror: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
+  onaudiostart: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onaudioend: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onsoundstart: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onsoundend: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onspeechstart: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onspeechend: ((this: SpeechRecognition, ev: Event) => void) | null;
 }
 
 const FILLER_WORDS = ["Hmm", "Let me think", "Just a moment", "Okay", "Got it"];
@@ -46,21 +54,36 @@ class SpeechService {
   private selectedVoice: SpeechSynthesisVoice | null = null;
   private isVoicesLoaded: boolean = false;
   private retryCount: number = 0;
-  private readonly MAX_RETRIES: number = 3;
-  private isListening: boolean = false;
+  private readonly MAX_RETRIES: number = 3;  private isListening: boolean = false;
   private isSpeakerEnabled: boolean = true;
-
+  private hasUserInteracted: boolean = false;
+  private silenceTimer: NodeJS.Timeout | null = null;
+  private currentTranscript: string = '';
+  private onSilenceCallback: ((transcript: string) => void) | null = null;
   constructor() {
     this.synthesis = window.speechSynthesis;
     this.recognition = this.createRecognition();
     this.loadVoices();
+    this.setupUserInteractionDetection();
   }
 
-  private createRecognition(): SpeechRecognition | null {
+  private setupUserInteractionDetection() {
+    const handleUserInteraction = () => {
+      this.hasUserInteracted = true;
+      // Remove listeners after first interaction
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
+    };
+
+    document.addEventListener('click', handleUserInteraction, { once: true });
+    document.addEventListener('keydown', handleUserInteraction, { once: true });
+    document.addEventListener('touchstart', handleUserInteraction, { once: true });
+  }private createRecognition(): SpeechRecognition | null {
     const SpeechRecognition = window.SpeechRecognition || 
-                             (window as any).webkitSpeechRecognition || 
-                             (window as any).mozSpeechRecognition || 
-                             (window as any).msSpeechRecognition;
+                             window.webkitSpeechRecognition || 
+                             window.mozSpeechRecognition || 
+                             window.msSpeechRecognition;
 
     if (!SpeechRecognition) {
       console.warn('Speech recognition not supported in this browser');
@@ -69,8 +92,8 @@ class SpeechService {
 
     try {
       const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
+      recognition.continuous = true;
+      recognition.interimResults = true;
       recognition.lang = 'en-US';
       
       recognition.onstart = () => {
@@ -81,10 +104,9 @@ class SpeechService {
       recognition.onend = () => {
         console.log('Speech recognition ended');
         this.isListening = false;
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
+      };      recognition.onerror = (event: Event) => {
+        const errorEvent = event as SpeechRecognitionErrorEvent;
+        console.error('Speech recognition error:', errorEvent.error);
         this.isListening = false;
       };
 
@@ -280,12 +302,36 @@ class SpeechService {
 
   public isSpeakerOn(): boolean {
     return this.isSpeakerEnabled;
-  }
+  }  async speak(text: string, settings: VoiceSettings): Promise<void> {
+    console.log('Speech synthesis attempt:', { 
+      text: text.substring(0, 50) + '...', 
+      hasUserInteracted: this.hasUserInteracted,
+      isSpeakerEnabled: this.isSpeakerEnabled,
+      synthesisSpeaking: this.synthesis?.speaking
+    });
 
-  async speak(text: string, settings: VoiceSettings): Promise<void> {
     if (!this.isSpeakerEnabled) {
       console.log('Speaker is disabled, skipping speech synthesis.');
       return;
+    }
+
+    // Check if speechSynthesis is available
+    if (!this.synthesis) {
+      console.warn('Speech synthesis not available');
+      return;
+    }
+
+    // Check for user interaction - required by browsers for speech synthesis
+    if (!this.hasUserInteracted) {
+      console.log('Waiting for user interaction before enabling speech synthesis. Call speechService.triggerUserInteraction() or click anywhere to enable.');
+      return;
+    }
+
+    // Stop any ongoing listening before speaking
+    if (this.isListening && this.recognition) {
+      console.log('Stopping listening before speaking');
+      this.recognition.stop();
+      this.isListening = false;
     }
 
     // Check if another utterance is already in progress
@@ -302,17 +348,30 @@ class SpeechService {
     }
 
     return new Promise((resolve, reject) => {
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.voice = this.selectedVoice || settings.voice;
-      utterance.rate = settings.rate;
-      utterance.pitch = settings.pitch;
-      utterance.volume = settings.volume;
-      utterance.lang = settings.language;
+      try {
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.voice = this.selectedVoice || settings.voice;
+        utterance.rate = settings.rate;
+        utterance.pitch = settings.pitch;
+        utterance.volume = settings.volume;
+        utterance.lang = settings.language;
 
-      utterance.onend = () => resolve();
-      utterance.onerror = (event) => reject(event.error);
+        utterance.onend = () => resolve();        utterance.onerror = (event) => {
+          console.error('Speech synthesis error:', event.error);
+          // Don't reject for permission errors, just resolve silently
+          if (event.error === 'not-allowed' || String(event.error).includes('permission')) {
+            console.warn('Speech synthesis permission denied. Continuing without speech.');
+            resolve();
+          } else {
+            reject(new Error(`Speech synthesis failed: ${event.error}`));
+          }
+        };
 
-      this.synthesis.speak(utterance);
+        this.synthesis.speak(utterance);
+      } catch (error) {
+        console.error('Error creating speech utterance:', error);
+        reject(error);
+      }
     });
   }
 
@@ -320,19 +379,20 @@ class SpeechService {
     if (this.synthesis.speaking) {
       this.synthesis.cancel();
     }
-  }
-
-  startListening(callbacks: {
+  }  startListening(callbacks: {
     onResult: (transcript: string, isFinal: boolean) => void;
     onEnd: () => void;
-    onError: (error: any) => void;
+    onError: (error: string) => void;
   }): void {
     if (!this.recognition || this.isListening) {
       return;
     }
 
-    // Interrupt any ongoing speech
-    this.stopSpeaking();
+    // Stop any ongoing speech before listening
+    if (this.synthesis.speaking) {
+      console.log('Stopping speech before listening');
+      this.stopSpeaking();
+    }
 
     this.recognition.onresult = (event: SpeechRecognitionEvent) => {
       // For one-shot recognition, we only need the final result.
@@ -345,20 +405,163 @@ class SpeechService {
       callbacks.onEnd();
     };
 
-    this.recognition.onerror = (event: any) => {
+    this.recognition.onerror = (event: Event) => {
       this.isListening = false;
-      callbacks.onError(event.error);
+      const errorEvent = event as SpeechRecognitionErrorEvent;
+      let errorMessage = errorEvent.error;
+      
+      // Provide user-friendly error messages
+      switch (errorEvent.error) {
+        case 'not-allowed':
+          errorMessage = 'Microphone access denied. Please allow microphone access and try again.';
+          break;
+        case 'no-speech':
+          errorMessage = 'No speech detected. Please try speaking again.';
+          break;
+        case 'network':
+          errorMessage = 'Network error. Please check your internet connection.';
+          break;
+        case 'audio-capture':
+          errorMessage = 'No microphone found. Please check your microphone connection.';
+          break;
+        case 'aborted':
+          errorMessage = 'Speech recognition was aborted.';
+          break;
+        default:
+          errorMessage = `Speech recognition error: ${errorEvent.error}`;
+      }
+      
+      callbacks.onError(errorMessage);
+    };
+
+    this.recognition.start();
+    this.isListening = true;
+  }
+  // Continuous listening with silence detection
+  startContinuousListening(callbacks: {
+    onResult: (transcript: string, isFinal: boolean) => void;
+    onSilence: (transcript: string) => void;
+    onError: (error: unknown) => void;
+  }): void {
+    if (!this.recognition || this.isListening) {
+      return;
+    }
+
+    // Stop any ongoing speech before listening
+    if (this.synthesis.speaking) {
+      console.log('Stopping speech before continuous listening');
+      this.stopSpeaking();
+    }
+
+    // Clear any existing silence timer
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
+
+    this.currentTranscript = '';
+    this.onSilenceCallback = callbacks.onSilence;
+
+    this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // Update current transcript
+      if (finalTranscript) {
+        this.currentTranscript = finalTranscript.trim();
+        callbacks.onResult(this.currentTranscript, true);
+      } else if (interimTranscript) {
+        callbacks.onResult(interimTranscript.trim(), false);
+      }
+
+      // Reset silence timer when we get speech
+      if (interimTranscript || finalTranscript) {
+        if (this.silenceTimer) {
+          clearTimeout(this.silenceTimer);
+        }
+        
+        // Start new silence timer (5 seconds)
+        this.silenceTimer = setTimeout(() => {
+          if (this.currentTranscript.trim()) {
+            this.onSilenceCallback?.(this.currentTranscript.trim());
+            this.currentTranscript = '';
+          }
+          this.silenceTimer = null;
+        }, 5000);
+      }
+    };
+
+    this.recognition.onend = () => {
+      this.isListening = false;
+      if (this.silenceTimer) {
+        clearTimeout(this.silenceTimer);
+        this.silenceTimer = null;
+      }
+    };    this.recognition.onerror = (event: Event) => {
+      this.isListening = false;
+      if (this.silenceTimer) {
+        clearTimeout(this.silenceTimer);
+        this.silenceTimer = null;
+      }
+      const errorEvent = event as SpeechRecognitionErrorEvent;
+      let errorMessage = errorEvent.error;
+      
+      // Provide user-friendly error messages
+      switch (errorEvent.error) {
+        case 'not-allowed':
+          errorMessage = 'Microphone access denied. Please allow microphone access in your browser settings and refresh the page.';
+          break;
+        case 'no-speech':
+          errorMessage = 'No speech detected. Please try speaking again.';
+          break;
+        case 'network':
+          errorMessage = 'Network error. Please check your internet connection.';
+          break;
+        case 'audio-capture':
+          errorMessage = 'No microphone found. Please check your microphone connection.';
+          break;
+        case 'aborted':
+          errorMessage = 'Speech recognition was aborted.';
+          break;
+        default:
+          errorMessage = `Speech recognition error: ${errorEvent.error}`;
+      }
+      
+      callbacks.onError(errorMessage);
     };
 
     this.recognition.start();
     this.isListening = true;
   }
 
-  stopListening() {
+  // Stop continuous listening
+  stopContinuousListening(): void {
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
+    
     if (this.recognition && this.isListening) {
       this.recognition.stop();
       this.isListening = false;
     }
+    
+    this.currentTranscript = '';
+    this.onSilenceCallback = null;
+  }
+
+  // Check if currently in continuous listening mode
+  isContinuousListening(): boolean {
+    return this.isListening && this.onSilenceCallback !== null;
   }
 
   getVoices(): SpeechSynthesisVoice[] {
@@ -372,6 +575,65 @@ class SpeechService {
   isRecognitionSupported(): boolean {
     return 'webkitSpeechRecognition' in window;
   }
+
+  // Check microphone permissions
+  async checkMicrophonePermissions(): Promise<boolean> {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return false;
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // If we got the stream, permissions are granted
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch (error) {
+      console.error('Microphone permission check failed:', error);
+      return false;
+    }
+  }
+  // Request microphone permissions explicitly
+  async requestMicrophonePermissions(): Promise<boolean> {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return false;
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch (error) {
+      console.error('Failed to request microphone permissions:', error);
+      return false;
+    }
+  }
+
+  // Check if user has interacted with the page (required for speech synthesis)
+  hasUserInteractionOccurred(): boolean {
+    return this.hasUserInteracted;
+  }
+  // Manually trigger user interaction (for testing)
+  triggerUserInteraction(): void {
+    this.hasUserInteracted = true;
+    console.log('User interaction manually triggered - speech synthesis now available');
+  }
+
+  // Debug method to check current state
+  getDebugInfo() {
+    return {
+      hasUserInteracted: this.hasUserInteracted,
+      isSpeakerEnabled: this.isSpeakerEnabled,
+      synthesisSpeaking: this.synthesis?.speaking || false,
+      voicesLoaded: this.isVoicesLoaded,
+      selectedVoice: this.selectedVoice?.name || 'none'
+    };
+  }
 }
 
 export const speechService = new SpeechService();
+
+// Expose to window for debugging
+if (typeof window !== 'undefined') {
+  (window as typeof window & { speechService: SpeechService }).speechService = speechService;
+  console.log('Speech service exposed to window.speechService for debugging');
+}

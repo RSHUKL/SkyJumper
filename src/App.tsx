@@ -1,47 +1,52 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChatHeader } from './components/ChatHeader';
-import { MessageBubble } from './components/MessageBubble';
-import { TypingIndicator } from './components/TypingIndicator';
-import { ChatInput } from './components/ChatInput';
-import { ErrorMessage } from './components/ErrorMessage';
-import { WelcomeMessage } from './components/WelcomeMessage';
+import { ChatContainer } from './components/ChatContainer';
+import { BookingForm } from './components/BookingForm';
 import { useChat } from './hooks/useChat';
 import { useVoice } from './hooks/useVoice';
 import { groqService } from './services/groqService';
+import type { BookingDetails } from './types';
 
 function App() {
   const navigate = useNavigate();
   const chat = useChat(navigate);
   const voice = useVoice();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [currentTranscript] = useState('');
+  const spokenMessagesRef = useRef(new Set());
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
-
   useEffect(() => {
     scrollToBottom();
   }, [chat.messages, chat.isLoading]);
 
-  // Speak the latest AI message if voice is enabled
   useEffect(() => {
+    const lastMessage = chat.messages[chat.messages.length - 1];
+    const hasUserInteracted = voice.hasUserInteracted();
+
     if (
-      chat.messages.length > 0 &&
+      lastMessage &&
+      lastMessage.sender === 'ai' &&
+      !spokenMessagesRef.current.has(lastMessage.id) &&
       voice.settings.enabled &&
       voice.settings.autoPlay &&
-      voice.isSynthesisSupported
+      !voice.isSpeaking &&
+      hasUserInteracted
     ) {
-      const lastMsg = chat.messages[chat.messages.length - 1];
-      if (lastMsg.sender === 'ai') {
-        voice.speak(lastMsg.text);
-      }
+      voice.speak(lastMessage.text);
+      spokenMessagesRef.current.add(lastMessage.id);
     }
-  }, [chat.messages, voice.settings, voice.isSynthesisSupported, voice.speak]);
+  }, [chat.messages, voice, voice.settings.enabled, voice.settings.autoPlay, voice.isSpeaking]);
 
   const handleSendMessage = async (text: string) => {
+    if (voice.isListening) {
+      voice.stopContinuousListening();
+    }
+    
     await chat.sendMessage(text);
-    // Do NOT call voice.speak here; useEffect will handle it.
   };
 
   const handleToggleVoice = () => {
@@ -58,6 +63,33 @@ function App() {
     chat.clearError();
     voice.clearError();
   };
+
+  const handleUpdateBookingField = useCallback((field: keyof BookingDetails, value: string) => {
+    chat.updateBookingField(field, value);
+  }, [chat]);
+
+  // Debug: Check speech service state on component mount
+  useEffect(() => {
+    console.log('=== SPEECH DEBUG INFO ===');
+    console.log('Speech Service State:', {
+      synthSupported: voice.isSynthesisSupported,
+      voiceEnabled: voice.settings.enabled,
+      autoPlay: voice.settings.autoPlay,
+      hasUserInteracted: voice.hasUserInteracted(),
+      messagesLength: chat.messages.length,
+      firstMessage: chat.messages[0]?.text?.substring(0, 50) || 'No messages yet'
+    });
+    // Removed delayed speech test to prevent duplicate welcome message speech
+  }, [chat.messages, voice]);
+
+  // Handle textbox focus - initialize chat and trigger speech
+
+  const handleTextboxFocus = useCallback(() => {
+    if (!chat.isInitialized) {
+      chat.initializeChat();
+      voice.triggerUserInteraction();
+    }
+  }, [voice, chat]);
 
   if (!groqService.isAvailable()) {
     return (
@@ -82,50 +114,68 @@ function App() {
         </div>
       </div>
     );
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      <div className="max-w-4xl mx-auto h-screen flex flex-col">
-        <ChatHeader 
-          onClearChat={chat.clearMessages}
-          voiceEnabled={voice.settings.enabled}
-          onToggleVoice={handleToggleVoice}
-        />
-        
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-4">
-            {showError && (
-              <ErrorMessage 
-                message={errorMessage}
-                onDismiss={clearError}
-              />
-            )}
-            
-            {chat.messages.length === 0 ? (
-              <WelcomeMessage />
-            ) : (
-              <div className="space-y-4">
-                {chat.messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} />
-                ))}
-                
-                {chat.isLoading && <TypingIndicator />}
-              </div>
-            )}
-            
-            <div ref={messagesEndRef} />
+  }  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col">
+      {/* Header */}
+      <ChatHeader 
+        onClearChat={chat.clearMessages}
+        voiceEnabled={voice.settings.enabled}
+        onToggleVoice={handleToggleVoice}
+        autoVoiceMode={chat.autoVoiceMode}
+        onToggleAutoVoice={chat.toggleAutoVoiceMode}
+      />      {/* Main Content - Responsive Layout */}
+      <div className="flex-1 flex flex-col lg:flex-row">
+        {/* Left Section - Chat (50% width on desktop) */}
+        <div className="flex-1 lg:w-1/2 flex flex-col h-[60vh] lg:h-[calc(100vh-152px)]">
+          <div className="flex-1 w-full p-4 lg:p-6 overflow-y-auto">            <ChatContainer
+              messages={chat.messages}
+              isLoading={chat.isLoading}
+              onSendMessage={handleSendMessage}
+              waitingForName={chat.waitingForName}
+              currentTranscript={currentTranscript}
+              isAutoVoiceMode={chat.autoVoiceMode}
+              showError={!!showError}
+              errorMessage={errorMessage}
+              onDismissError={clearError}
+              messagesEndRef={messagesEndRef}
+              voiceEnabled={voice.settings.enabled}
+              onTextboxFocus={handleTextboxFocus}
+            />
+          </div>
+        </div>{/* Right Section - Booking Form (50% width on desktop) */}
+        <div className="hidden lg:flex lg:w-1/2 flex-col border-l border-gray-200 bg-white/50 h-[calc(100vh-152px)]">
+          <div className="flex-1 w-full p-4 lg:p-6 overflow-y-auto">
+            <BookingForm
+              key={chat.booking ? 'booking-active' : 'booking-empty'}
+              bookingData={chat.booking?.data || {}}
+              onUpdateField={handleUpdateBookingField}
+            />
           </div>
         </div>
-        
-        <ChatInput
-          onSendMessage={handleSendMessage}
-          isLoading={chat.isLoading}
-          disabled={chat.isLoading}
-          waitingForName={chat.waitingForName}
-          userName={chat.userName}
-        />
       </div>
+        {/* Mobile: Bottom Booking Form (visible on small screens) */}      <div className="lg:hidden border-t border-gray-200 bg-white h-[40vh] overflow-hidden">
+        <div className="h-full w-full">
+          <BookingForm
+            key={chat.booking ? 'booking-active' : 'booking-empty-mobile'}
+            bookingData={chat.booking?.data || {}}
+            onUpdateField={handleUpdateBookingField}
+          />        </div>
+      </div>
+      
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-4 px-6 text-center">
+        <p className="text-sm">
+          Developed by{' '}
+          <a 
+            href="https://www.exponentsolutions.ai/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-[#f58220] hover:text-orange-300 transition-colors duration-200 font-medium"
+          >
+            Exponent Solutions 
+          </a>
+        </p>
+      </footer>
     </div>
   );
 }

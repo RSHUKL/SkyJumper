@@ -1,21 +1,9 @@
 import { useState, useCallback, useRef } from 'react';
 import { NavigateFunction } from 'react-router-dom';
 import { groqService } from '../services/groqService';
-import type { Message, ChatState, BookingState, BookingStep, BookingDetails } from '../types';
-import { generateBookingPDF } from '../services/pdfService';
+import type { Message, ChatState, BookingDetails } from '../types';
 
-const BOOKING_STEPS: BookingStep[] = ['location', 'name', 'phone', 'slotTime', 'bookingDate', 'done'];
-const BOOKING_QUESTIONS: Record<BookingStep, string> = {
-  location: "What is your preferred location for the booking? Kindly select one from the following options: Ambernath!, Amritsar!, Bangalore!, Bathinda!, Chennai!, Chandigarh!, Delhi!, Faridabad!, Ghaziabad!, Gurugram ILD!, Gurugram M3M Broadway!, Gurugram Ocus Medley!, Jalandhar!, Karnal!, Lucknow!, Noida Go Bananas!, Noida Spectrum!, Noida Wave!, Pune Amanora!, Pune Creaticity! ",
-  name: "May I please have your full name to ensure the booking is registered correctly under your details?",
-  phone: "Could you kindly share your phone number? This will help us contact you if needed and confirm your reservation.",
-  slotTime: "What preferred slot time would you like to reserve for your visit? For example, 30 Min, 60 Min, 90 Min",
-  bookingDate: "On which date would you like to schedule your visit? Kindly enter the date !",
-  done: ''
-};
-
-export function useChat(navigate: NavigateFunction) {
-  const [state, setState] = useState<ChatState>({
+export function useChat(navigate: NavigateFunction) {  const [state, setState] = useState<ChatState>({
     messages: [],
     isLoading: false,
     isListening: false,
@@ -23,30 +11,18 @@ export function useChat(navigate: NavigateFunction) {
     error: null,
     userName: null,
     waitingForName: false,
-    // Booking state
-    booking: null as BookingState | null
+    waitingForNameConfirmation: false,
+    autoVoiceMode: false, // Changed to false by default so mic button is visible
+    isInitialized: false,
+    booking: null,
+    pendingUserName: null
   });
-
   const messageIdCounter = useRef(0);
   const conversationHistory = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const isAutoVoiceInitialized = useRef(false);
+  const isGeneralInitialized = useRef(false);
 
   const generateMessageId = () => `msg-${++messageIdCounter.current}`;
-
-  // Helper: detect greeting
-  const isGreeting = (text: string) => {
-    const greetings = [
-      'hi', 'hello', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening', 'yo', 'sup', 'hola', 'namaste'
-    ];
-    const normalized = text.trim().toLowerCase();
-    return greetings.some(greet => normalized.startsWith(greet));
-  };
-
-  // Helper: detect booking intent
-  const isBookingIntent = (text: string) => {
-    const bookingWords = ['book', 'booking', 'reserve', 'reservation', 'slot', 'ticket'];
-    const normalized = text.trim().toLowerCase();
-    return bookingWords.some(word => normalized.includes(word));
-  };
 
   const addMessage = useCallback((text: string, sender: 'user' | 'ai') => {
     const newMessage: Message = {
@@ -73,129 +49,224 @@ export function useChat(navigate: NavigateFunction) {
     }
 
     return newMessage;
-  }, []);
-
-  // Booking flow handler
-  const handleBookingStep = useCallback((text: string) => {
-    setState(prev => {
-      if (!prev.booking) return prev;
-      const { step, data } = prev.booking;
-      const nextData = { ...data };
-      if (step !== 'done') nextData[step] = text.trim();
-      const currentStepIdx = BOOKING_STEPS.indexOf(step);
-      const nextStep = BOOKING_STEPS[currentStepIdx + 1];
-      // Prepare new messages array
-      let newMessages = [...prev.messages];
-      let newConversationHistory = [...conversationHistory.current];
-      // Add user message
-      const userMsg: Message = {
-        id: generateMessageId(),
-        text: text.trim(),
-        sender: 'user',
-        timestamp: new Date()
-      };
-      newMessages.push(userMsg);
-      newConversationHistory.push({ role: 'user', content: text.trim() });
-      if (nextStep && nextStep !== 'done') {
-        // Add bot question
-        const botMsg: Message = {
-          id: generateMessageId(),
-          text: BOOKING_QUESTIONS[nextStep],
-          sender: 'ai',
-          timestamp: new Date()
-        };
-        newMessages.push(botMsg);
-        newConversationHistory.push({ role: 'assistant', content: BOOKING_QUESTIONS[nextStep] });
-        conversationHistory.current = newConversationHistory.slice(-20);
-        return {
-          ...prev,
-          messages: newMessages,
-          booking: { step: nextStep, data: nextData }
-        };
-      } else {
-        // Booking complete
-        // Generate PDF
-        generateBookingPDF(nextData as BookingDetails);
-        const botMsg: Message = {
-          id: generateMessageId(),
-          text: 'Your booking has been successfully confirmed. A confirmation PDF containing all the relevant details has been generated and downloaded for your reference. Thank you for choosing SkyJumper! for best experience log on to our website https://skyjumpertrampolinepark.com/',
-          sender: 'ai',
-          timestamp: new Date()
-        };
-        newMessages.push(botMsg);
-        newConversationHistory.push({ role: 'assistant', content: botMsg.text });
-        conversationHistory.current = newConversationHistory.slice(-20);
-        
-        // Redirect to login page
-        setTimeout(() => navigate('/login'), 2000);
-
-        return {
-          ...prev,
-          messages: newMessages,
-          booking: null
-        };
+  }, []);  // Enhanced helper to extract comprehensive booking information
+  const extractBookingInfo = (userText: string, aiResponse: string): Partial<BookingDetails> => {
+    const info: Partial<BookingDetails> = {};
+    const combinedText = `${userText} ${aiResponse}`.toLowerCase();
+    
+    // Extract name patterns (more comprehensive)
+    const namePatterns = [
+      /(?:my name is|i'm|call me)\s+([a-zA-Z]+)/i,
+      /(?:hi|hello),?\s*(?:i'm|i am)\s+([a-zA-Z]+)/i,
+      /(?:this is|it's)\s+([a-zA-Z]+)/i
+    ];
+    
+    for (const pattern of namePatterns) {
+      const match = userText.match(pattern) || aiResponse.match(pattern);
+      if (match && match[1].length > 1) {
+        info.name = match[1];
+        break;
       }
-    });
-  }, [navigate]);
+    }
+    
+    // Extract phone number (various formats)
+    const phonePatterns = [
+      /(?:\+91[\s-]?)?([6-9]\d{9})/,
+      /(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})/,
+      /(\d{10})/
+    ];
+    
+    for (const pattern of phonePatterns) {
+      const match = combinedText.match(pattern);
+      if (match) {
+        info.phone = match[1].replace(/[-.\s]/g, '');
+        break;
+      }
+    }
+    
+    // Extract event type
+    if (/birthday/i.test(combinedText)) info.eventType = 'Birthday Party';
+    else if (/kitty.*party/i.test(combinedText)) info.eventType = 'Kitty Party';
+    else if (/corporate/i.test(combinedText)) info.eventType = 'Corporate Event';
+    else if (/family.*outing/i.test(combinedText)) info.eventType = 'Family Outing';
+    else if (/team.*building/i.test(combinedText)) info.eventType = 'Team Building';
+    
+    // Extract number of guests
+    const guestPatterns = [
+      /(\d+)\s*(?:people|guests|kids|children|adults|persons)/i,
+      /(?:for|about)\s*(\d+)/i
+    ];
+    
+    for (const pattern of guestPatterns) {
+      const match = combinedText.match(pattern);
+      if (match) {
+        info.numberOfGuests = match[1];
+        break;
+      }
+    }
+    
+    // Extract age group
+    if (/kids?|children|3-12|under.*12/i.test(combinedText)) info.ageGroup = 'Kids (3-12 years)';
+    else if (/teen|13-17|teenager/i.test(combinedText)) info.ageGroup = 'Teens (13-17 years)';
+    else if (/adult|18\+|grown.*up/i.test(combinedText)) info.ageGroup = 'Adults (18+ years)';
+    else if (/mixed|all.*age|family/i.test(combinedText)) info.ageGroup = 'Mixed Ages';
+    
+    // Extract location (check against our 20 locations)
+    const locations = [
+      'ambernath', 'amritsar', 'bangalore', 'bathinda', 'chennai', 'chandigarh',
+      'delhi', 'faridabad', 'ghaziabad', 'gurugram', 'jalandhar', 'karnal',
+      'lucknow', 'noida', 'pune'
+    ];
+    
+    for (const location of locations) {
+      if (combinedText.includes(location)) {
+        info.location = location.charAt(0).toUpperCase() + location.slice(1);
+        break;
+      }
+    }
+    
+    // Extract date
+    const datePatterns = [
+      /(?:on|for)\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*)/i,
+      /(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/,
+      /(tomorrow|next week|this weekend)/i
+    ];
+    
+    for (const pattern of datePatterns) {
+      const match = combinedText.match(pattern);
+      if (match) {
+        info.eventDate = match[1];
+        break;
+      }
+    }
+    
+    // Extract time slot
+    const timePatterns = [
+      /(\d{1,2}:\d{2}\s*(?:am|pm)?\s*-?\s*\d{1,2}:\d{2}\s*(?:am|pm)?)/i,
+      /(morning|afternoon|evening)/i,
+      /(\d{1,2}\s*(?:am|pm))/i
+    ];
+    
+    for (const pattern of timePatterns) {
+      const match = combinedText.match(pattern);
+      if (match) {
+        info.timeSlot = match[1];
+        break;
+      }
+    }
+    
+    // Extract theme
+    const themes = ['superhero', 'princess', 'unicorn', 'sports', 'space', 'frozen', 'cars', 'avengers', 'bollywood'];
+    for (const theme of themes) {
+      if (combinedText.includes(theme)) {
+        info.theme = theme.charAt(0).toUpperCase() + theme.slice(1);
+        break;
+      }
+    }
+    
+    return info;
+  };
+
+  // Simple helper to detect booking completion
+  const isBookingComplete = (aiResponse: string): boolean => {
+    const indicators = [
+      'booking confirmed',
+      'confirmation pdf',
+      'booking complete',
+      'reservation confirmed',
+      'pdf has been generated'
+    ];
+    return indicators.some(indicator => 
+      aiResponse.toLowerCase().includes(indicator)
+    );
+  };
 
   const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim()) return null;
+    if (!text.trim()) return;
+    addMessage(text.trim(), 'user');
+    setState(prev => ({ ...prev, error: null, isLoading: true }));
 
-    // If in booking flow, handle booking step
-    if (state.booking) {
-      handleBookingStep(text);
-      return { text };
-    }
-
-    // If waiting for name, treat this message as the user's name
-    if (state.waitingForName) {
-      const name = text.trim();
-      setState(prev => ({ ...prev, userName: name, waitingForName: false }));
-      addMessage(name, 'user');
-      const aiText = `Nice to meet you, ${name}! I'm here to ensure your SkyJumper experience is as seamless and enjoyable as possible. How may I assist you today in planning your visit or managing your booking?`;
-      addMessage(aiText, 'ai');
-      return { text: aiText };
-    }
-
-    // If first message and greeting, ask for name
-    if (state.messages.length === 0 && isGreeting(text)) {
-      addMessage(text.trim(), 'user');
-      setState(prev => ({ ...prev, waitingForName: true }));
-      const aiText = `Welcome to SkyJumper! your go-to destination for excitement and adventure. I'm your Assistant, your dedicated booking assistant, here to help you plan a memorable experience filled with trampolines, games, and high-energy activities. To get started, may I please have your name?`;
-      addMessage(aiText, 'ai');
-      return { text: aiText };
-    }
-
-    // If booking intent, start booking flow
-    if (isBookingIntent(text)) {
-      addMessage(text.trim(), 'user');
-      addMessage(BOOKING_QUESTIONS['location'], 'ai');
-      setState(prev => ({ ...prev, booking: { step: 'location', data: {} } }));
-      return { text };
-    }
-
-    setState(prev => ({ ...prev, error: null }));
-    // Add user message
-    const userMessage = addMessage(text.trim(), 'user');
-    // Show loading state
-    setState(prev => ({ ...prev, isLoading: true }));
     try {
-      // Generate AI response, pass userName for personalization
-      const response = await groqService.generateResponse(conversationHistory.current, 3, state.userName);
-      // Add AI message
-      const aiMessage = addMessage(response, 'ai');
+      if (state.waitingForNameConfirmation && state.pendingUserName) {
+        const confirmation = text.trim().toLowerCase();
+        if (['yes', 'yeah', 'yep', 'correct', 'right'].includes(confirmation)) {
+          const confirmedName = state.pendingUserName;
+          setState(prev => ({
+            ...prev,
+            userName: confirmedName,
+            waitingForNameConfirmation: false,
+            pendingUserName: null,
+            booking: {
+              step: 'phone',
+              data: { ...prev.booking?.data, name: confirmedName }
+            }
+          }));
+
+          const responseText = `Great! Your name is ${confirmedName}. To proceed with the booking, could you please provide your phone number?`;
+          addMessage(responseText, 'ai');
+          conversationHistory.current.push({ role: 'assistant', content: responseText });
+
+        } else {
+          setState(prev => ({ ...prev, waitingForNameConfirmation: false, pendingUserName: null }));
+          const responseText = "My apologies. Could you please spell out your name for me?";
+          addMessage(responseText, 'ai');
+          conversationHistory.current.push({ role: 'assistant', content: responseText });
+        }
+        setState(prev => ({ ...prev, isLoading: false }));
+        return;
+      }
+
+      const isFirstMessage = state.messages.length <= 1;
+      const needsName = !state.userName;
+
+      const response = await groqService.generateResponse(
+        conversationHistory.current,
+        3,
+        state.userName,
+        { isFirstMessage, needsName, expectingBooking: false }
+      );
+
+      const bookingInfo = extractBookingInfo(text.trim(), response);
+
+      if (bookingInfo.name && !state.userName && !state.pendingUserName) {
+        const newPendingName = bookingInfo.name;
+        setState(prev => ({
+          ...prev,
+          pendingUserName: newPendingName,
+          waitingForNameConfirmation: true
+        }));
+        const confirmationMsg = `I heard your name is ${bookingInfo.name}. Is the spelling correct?`;
+        addMessage(confirmationMsg, 'ai');
+        conversationHistory.current.push({ role: 'assistant', content: confirmationMsg });
+      } else {
+        addMessage(response, 'ai');
+        setState(prev => ({
+          ...prev,
+          booking: {
+            step: prev.booking?.step || 'name',
+            data: { ...prev.booking?.data, ...bookingInfo }
+          }
+        }));
+
+        if (isBookingComplete(response)) {
+          setTimeout(() => {
+            clearMessages();
+            initializeChat();
+          }, 3000);
+        }
+      }
+
       setState(prev => ({ ...prev, isLoading: false }));
-      return aiMessage;
-    } catch (error: any) {
+
+    } catch (error: unknown) {
       console.error('Chat error:', error);
       setState(prev => ({
         ...prev,
         isLoading: false,
-        error: error.message || 'Failed to get AI response'
+        error: error instanceof Error ? error.message : 'Failed to get AI response'
       }));
-      return null;
     }
-  }, [addMessage, state.messages.length, state.waitingForName, state.userName, state.booking, handleBookingStep]);
+  }, [addMessage, state.messages.length, state.userName, state.waitingForNameConfirmation, state.pendingUserName, navigate]);
 
   const clearMessages = useCallback(() => {
     setState(prev => ({
@@ -204,9 +275,13 @@ export function useChat(navigate: NavigateFunction) {
       error: null,
       userName: null,
       waitingForName: false,
+      waitingForNameConfirmation: false,
+      pendingUserName: null,
+      isInitialized: false,
       booking: null
     }));
     conversationHistory.current = [];
+    isAutoVoiceInitialized.current = false;
   }, []);
 
   const setListening = useCallback((listening: boolean) => {
@@ -219,14 +294,75 @@ export function useChat(navigate: NavigateFunction) {
 
   const clearError = useCallback(() => {
     setState(prev => ({ ...prev, error: null }));
+  }, []);  // Initialize auto voice conversation with AI
+  const initializeAutoVoice = useCallback(() => {
+    console.log('=== initializeAutoVoice called ===', {
+      isAutoVoiceInitialized: isAutoVoiceInitialized.current,
+      isInitialized: state.isInitialized,
+      autoVoiceMode: state.autoVoiceMode
+    });
+    
+    if (!isAutoVoiceInitialized.current && !state.isInitialized && state.autoVoiceMode) {
+      isAutoVoiceInitialized.current = true;
+      
+      // Business-focused welcome message
+      const welcomeMsg = "Hi! Welcome to SkyJumper — your spot for fun and adventure. I'm your booking assistant. Can I please have your name to get started?";
+      
+      console.log('Adding welcome message via initializeAutoVoice');
+      addMessage(welcomeMsg, 'ai');
+      setState(prev => ({ ...prev, isInitialized: true }));
+      
+      return welcomeMsg;
+    } else {
+      console.log('Skipping initializeAutoVoice - already initialized or wrong conditions');
+    }
+    return null;
+  }, [addMessage, state.autoVoiceMode, state.isInitialized]);  // Initialize chat with default welcome message (regardless of auto voice mode)
+  const initializeChat = useCallback(() => {
+    console.log('=== initializeChat called ===', {
+      isInitialized: state.isInitialized,
+      isGeneralInitialized: isGeneralInitialized.current
+    });
+    
+    if (!state.isInitialized && !isGeneralInitialized.current) {
+      isGeneralInitialized.current = true;
+      
+      // Business-focused welcome message
+      const welcomeMsg = "Hi! Welcome to SkyJumper — your spot for fun and adventure. I'm your booking assistant. Can I please have your name to get started?";
+      
+      console.log('Adding welcome message via initializeChat');
+      addMessage(welcomeMsg, 'ai');
+      setState(prev => ({ ...prev, isInitialized: true }));
+      
+      return welcomeMsg;
+    } else {
+      console.log('Skipping initializeChat - already initialized');
+    }
+    return null;
+  }, [addMessage, state.isInitialized]);
+  const toggleAutoVoiceMode = useCallback(() => {
+    setState(prev => ({ ...prev, autoVoiceMode: !prev.autoVoiceMode }));
   }, []);
 
+  const updateBookingField = useCallback((field: keyof BookingDetails, value: string) => {
+    setState(prev => ({
+      ...prev,
+      booking: {
+        step: prev.booking?.step || 'name',
+        data: { ...prev.booking?.data, [field]: value }
+      }
+    }));
+  }, []);
   return {
     ...state,
     sendMessage,
     clearMessages,
     setListening,
     setPlaying,
-    clearError
+    clearError,
+    initializeAutoVoice,
+    initializeChat,
+    toggleAutoVoiceMode,
+    updateBookingField
   };
 }
