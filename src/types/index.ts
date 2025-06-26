@@ -30,11 +30,9 @@ export interface ChatState {
   error: string | null;
   userName: string | null;
   waitingForName: boolean;
-  waitingForNameConfirmation: boolean;
   autoVoiceMode: boolean;
   isInitialized: boolean;
   booking: BookingState | null;
-  pendingUserName: string | null;
 }
 
 export interface APIError {
