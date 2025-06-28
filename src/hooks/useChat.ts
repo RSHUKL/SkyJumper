@@ -76,9 +76,8 @@ export function useChat(navigate: NavigateFunction) {
     
     // Extract phone number (various formats)
     const phonePatterns = [
-      /(?:\+91[\s-]?)?([6-9]\d{9})/,
-      /(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})/,
-      /(\d{10})/
+      /(?:\b|\D)(?:\+91[\s-]?|91[\s-]?)?([6-9]\d{9})\b/, // Indian numbers with or without +91/91
+      /(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})/, // US-style
     ];
     
     for (const pattern of phonePatterns) {
