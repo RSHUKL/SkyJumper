@@ -88,12 +88,20 @@ export function useChat(navigate: NavigateFunction) {
       }
     }
     
-    // Extract event type
-    if (/birthday/i.test(combinedText)) info.eventType = 'Birthday Party';
-    else if (/kitty.*party/i.test(combinedText)) info.eventType = 'Kitty Party';
-    else if (/corporate/i.test(combinedText)) info.eventType = 'Corporate Event';
-    else if (/family.*outing/i.test(combinedText)) info.eventType = 'Family Outing';
-    else if (/team.*building/i.test(combinedText)) info.eventType = 'Team Building';
+    // Extract event type (only from userText, stricter matching)
+    const eventTypePatterns = [
+      { regex: /\bbirthday( party)?\b/i, value: 'Birthday Party' },
+      { regex: /\bkitty( party)?\b/i, value: 'Kitty Party' },
+      { regex: /\bcorporate( event)?\b/i, value: 'Corporate Event' },
+      { regex: /\bfamily( outing)?\b/i, value: 'Family Outing' },
+      { regex: /\bteam( building)?\b/i, value: 'Team Building' },
+    ];
+    for (const { regex, value } of eventTypePatterns) {
+      if (regex.test(userText)) {
+        info.eventType = value;
+        break;
+      }
+    }
     
     // Extract number of guests
     const guestPatterns = [
@@ -107,6 +115,11 @@ export function useChat(navigate: NavigateFunction) {
         info.numberOfGuests = match[1];
         break;
       }
+    }
+    
+    // Fallback: if user input is just a number, treat as number of guests
+    if (!info.numberOfGuests && /^\d+$/.test(userText.trim())) {
+      info.numberOfGuests = userText.trim();
     }
     
     // Extract age group
@@ -275,37 +288,63 @@ export function useChat(navigate: NavigateFunction) {
 
       // Prompt for next missing field in order
       if (bookingInfo.phone && !bookingInfo.eventType) {
-        const nextPrompt = 'Thank you for sharing your phone number. What type of event would you like to book? (e.g., Birthday Party, Kitty Party, Corporate Event, etc.)';
-        addMessage(nextPrompt, 'ai');
-        conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
+        // Only add manual prompt if AI response did not already ask for event type
+        const aiAskedEventType = /event type|what type of event|which event/i.test(response);
+        if (!aiAskedEventType) {
+          const nextPrompt = 'Thank you for sharing your phone number. What type of event would you like to book? (e.g., Birthday Party, Kitty Party, Corporate Event, etc.)';
+          addMessage(nextPrompt, 'ai');
+          conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
+        }
       } else if (bookingInfo.eventType && !bookingInfo.numberOfGuests) {
-        const nextPrompt = 'How many guests are you expecting for the event?';
-        addMessage(nextPrompt, 'ai');
-        conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
+        // Only add manual prompt if AI response did not already ask for number of guests
+        const aiAskedGuests = /number of guests|how many guests|guests are you expecting/i.test(response);
+        if (!aiAskedGuests) {
+          const nextPrompt = 'How many guests are you expecting for the event?';
+          addMessage(nextPrompt, 'ai');
+          conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
+        }
       } else if (bookingInfo.numberOfGuests && !bookingInfo.ageGroup) {
-        const nextPrompt = 'What is the age group of the guests? (e.g., Kids, Teens, Adults, Mixed)';
-        addMessage(nextPrompt, 'ai');
-        conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
+        // Only add manual prompt if AI response did not already ask for age group
+        const aiAskedAgeGroup = /age group|what is the age|guests.*age/i.test(response);
+        if (!aiAskedAgeGroup) {
+          const nextPrompt = 'What is the age group of the guests? (e.g., Kids, Teens, Adults, Mixed)';
+          addMessage(nextPrompt, 'ai');
+          conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
+        }
       } else if (bookingInfo.ageGroup && !bookingInfo.location) {
-        const nextPrompt = 'Which SkyJumper location would you prefer for your event?';
-        addMessage(nextPrompt, 'ai');
-        conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
+        // Only add manual prompt if AI response did not already ask for location
+        const aiAskedLocation = /location|which location|skyjumper location/i.test(response);
+        if (!aiAskedLocation) {
+          const nextPrompt = 'Which SkyJumper location would you prefer for your event?';
+          addMessage(nextPrompt, 'ai');
+          conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
+        }
       } else if (bookingInfo.location && !bookingInfo.eventDate) {
-        const nextPrompt = 'On which date would you like to book the event? (Please specify DD/MM/YYYY or describe)';
-        addMessage(nextPrompt, 'ai');
-        conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
+        // Only add manual prompt if AI response did not already ask for event date (stricter check)
+        const aiAskedEventDate = /(date|when|which day|what day)[^\.!?]*[\?]/i.test(response);
+        if (!aiAskedEventDate) {
+          const nextPrompt = 'On which date would you like to book the event? (Please specify DD/MM/YYYY or describe)';
+          addMessage(nextPrompt, 'ai');
+          conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
+        }
       } else if (bookingInfo.eventDate && !bookingInfo.timeSlot) {
-        const nextPrompt = 'What time slot do you prefer for your event? (e.g., 10:00 AM - 12:00 PM)';
+        // Only add manual prompt if AI response did not already ask for time slot
+        const aiAskedTimeSlot = /time slot|what time|which time|when/i.test(response);
+        if (!aiAskedTimeSlot) {
+          const nextPrompt = 'What time slot do you prefer for your event? (e.g., 10:00 AM - 12:00 PM)';
+          addMessage(nextPrompt, 'ai');
+          conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
+        }
+      } else if (bookingInfo.timeSlot && !bookingInfo.specialRequirements) {
+        // Optionally ask for special requirements, or skip to confirmation
+        const nextPrompt = 'Any special requirements or notes for your event? If not, just say "No".';
         addMessage(nextPrompt, 'ai');
         conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
-      } else if (bookingInfo.timeSlot && !bookingInfo.theme) {
-        const nextPrompt = 'Do you have a theme preference for the event? (e.g., Superhero, Princess, Sports, etc.)';
-        addMessage(nextPrompt, 'ai');
-        conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
-      } else if (bookingInfo.theme && !bookingInfo.specialRequirements) {
-        const nextPrompt = 'Any special requirements or notes for your event?';
-        addMessage(nextPrompt, 'ai');
-        conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
+      } else if (bookingInfo.timeSlot) {
+        // After timeSlot (and optionally specialRequirements), confirm booking
+        const confirmPrompt = 'Thank you! Your booking details are complete. We will now confirm your booking.';
+        addMessage(confirmPrompt, 'ai');
+        conversationHistory.current.push({ role: 'assistant', content: confirmPrompt });
       }
 
       if (isBookingComplete(response)) {
