@@ -119,15 +119,20 @@ export function useChat(navigate: NavigateFunction) {
     }
     
     // Fallback: if user input is just a number, treat as number of guests
-    if (!info.numberOfGuests && /^\d+$/.test(userText.trim())) {
+    if (
+      !info.numberOfGuests &&
+      /^\d+$/.test(userText.trim()) &&
+      // Only treat as guests if not a valid phone number (10 digits starting with 6-9)
+      !/^[6-9]\d{9}$/.test(userText.trim())
+    ) {
       info.numberOfGuests = userText.trim();
     }
     
-    // Extract age group
-    if (/kids?|children|3-12|under.*12/i.test(combinedText)) info.ageGroup = 'Kids (3-12 years)';
-    else if (/teen|13-17|teenager/i.test(combinedText)) info.ageGroup = 'Teens (13-17 years)';
-    else if (/adult|18\+|grown.*up/i.test(combinedText)) info.ageGroup = 'Adults (18+ years)';
-    else if (/mixed|all.*age|family/i.test(combinedText)) info.ageGroup = 'Mixed Ages';
+    // Extract age group (only from userText, stricter matching)
+    if (/kids?|children|3-12|under.*12/i.test(userText)) info.ageGroup = 'Kids (3-12 years)';
+    else if (/teen|13-17|teenager/i.test(userText)) info.ageGroup = 'Teens (13-17 years)';
+    else if (/adult|18\+|grown.*up/i.test(userText)) info.ageGroup = 'Adults (18+ years)';
+    else if (/mixed|all.*age|family/i.test(userText)) info.ageGroup = 'Mixed Ages';
     
     // Extract location (check against our 20 locations)
     const locations = [
@@ -349,10 +354,11 @@ export function useChat(navigate: NavigateFunction) {
       }
 
       if (isBookingComplete(response)) {
-        setTimeout(() => {
-          clearMessages();
-          initializeChat();
-        }, 3000);
+        // Removed automatic clear and re-initialization to prevent repeating questions
+        // setTimeout(() => {
+        //   clearMessages();
+        //   initializeChat();
+        // }, 3000);
       }
     } catch (error: unknown) {
       console.error('Chat error:', error);
