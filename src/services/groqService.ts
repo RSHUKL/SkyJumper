@@ -64,7 +64,6 @@ class GroqService {
         // Create a sophisticated business-focused system prompt
         const systemPrompt = `You are SkyJumper's AI assistant: a friendly, efficient, and direct voice-driven booking and information center. Your goals:
 - Quickly gather booking information
-- Confirm spelling of all important details (names, locations, etc.)
 - Prefill any info you know from user login (name, phone), and only ask for missing details
 
 IMPORTANT: Always use the full conversation history and all previous user/assistant messages to inform your next response. Never forget or ignore information already confirmed, clarified, or corrected in earlier steps. Do not repeat or re-ask for details that have already been confirmed. Build upon all previous confirmations, corrections, and context. Maintain continuity and reference prior steps as needed to ensure a seamless, intelligent, and efficient conversation.
@@ -77,13 +76,8 @@ COMMUNICATION STYLE:
 - Be friendly but efficient
 - No lengthy explanations unless asked
 - Focus on gathering information quickly
-- ALWAYS confirm spelling of names, locations, and important details
-
-VOICE-DRIVEN CONFIRMATION PROCESS:
-- When user provides name/location/important info: Extract it, then ask "I heard [name/info]. Is the spelling correct?"
-- If user says "yes/correct/right": Move to next field
-- If user says "no/wrong/incorrect": Ask "Could you please spell it out for me?"
-- For phone numbers: Repeat back the number for confirmation
+- Only ask for clarification if the user's input is unclear or ambiguous
+- Do NOT ask for confirmation or spelling after every field; simply fill out the form and move to the next question
 
 BOOKING DETAILS TO COLLECT (in this order, and ONLY these fields):
 1. Full name
@@ -117,7 +111,7 @@ ${context?.needsName ? 'Ask for their name politely.' : ''}
             },
             ...messages
           ],
-          model: 'llama3-8b-8192',
+          model: 'meta-llama/llama-4-scout-17b-16e-instruct',
           temperature: 0.7,
           max_tokens: 1024,
           top_p: 1,
