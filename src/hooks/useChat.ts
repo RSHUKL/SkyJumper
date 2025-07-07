@@ -152,7 +152,9 @@ export function useChat(navigate: NavigateFunction) {
     const datePatterns = [
       /(?:on|for)\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*)/i,
       /(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/,
-      /(tomorrow|next week|this weekend)/i
+      /(tomorrow|next week|this weekend)/i,
+      // New: Match standalone dates like '8 July' or '8th July'
+      /(\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*)/i
     ];
     
     for (const pattern of datePatterns) {
@@ -334,13 +336,10 @@ export function useChat(navigate: NavigateFunction) {
           conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
         }
       } else if (bookingInfo.eventDate && !bookingInfo.timeSlot) {
-        // Only add manual prompt if AI response did not already ask for time slot
-        const aiAskedTimeSlot = /time slot|what time|which time|when/i.test(response);
-        if (!aiAskedTimeSlot) {
-          const nextPrompt = 'What time slot do you prefer for your event? (e.g., 10:00 AM - 12:00 PM)';
-          addMessage(nextPrompt, 'ai');
-          conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
-        }
+        // Always prompt for time slot if eventDate is set and timeSlot is missing
+        const nextPrompt = 'What time slot do you prefer for your event? (e.g., 10:00 AM - 12:00 PM)';
+        addMessage(nextPrompt, 'ai');
+        conversationHistory.current.push({ role: 'assistant', content: nextPrompt });
       } else if (bookingInfo.timeSlot && !bookingInfo.specialRequirements) {
         // Optionally ask for special requirements, or skip to confirmation
         const nextPrompt = 'Any special requirements or notes for your event? If not, just say "No".';
