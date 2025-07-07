@@ -62,7 +62,7 @@ export function useChat(navigate: NavigateFunction) {
     ];
     
     for (const pattern of namePatterns) {
-      const match = userText.match(pattern) || aiResponse.match(pattern);
+      const match = userText.match(pattern);
       if (match && match[1].length > 1) {
         info.name = match[1].trim();
         break;
